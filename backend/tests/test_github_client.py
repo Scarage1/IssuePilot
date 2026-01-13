@@ -192,7 +192,7 @@ class TestGitHubClient:
             {"number": 2, "title": "PR", "body": "", "html_url": "url", "pull_request": {}},
         ]
 
-        with patch("httpx.AsyncClient") as mock_client:
+        with patch('httpx.AsyncClient') as mock_client:
             mock_response = MagicMock()
             mock_response.json.return_value = mock_data
             mock_response.raise_for_status = MagicMock()
