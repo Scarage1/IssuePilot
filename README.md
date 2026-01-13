@@ -147,6 +147,14 @@ source venv/bin/activate  # Windows: .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
+### Frontend (Web UI)
+
+```bash
+cd frontend
+npm install
+npm run dev  # Start development server at http://localhost:3000
+```
+
 ### CLI Tool
 
 ```bash
