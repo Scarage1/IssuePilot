@@ -43,7 +43,7 @@ jobs:
           pip install ruff black isort
           ruff check app/
           black --check app/
-          isort --check-only app/
+          isort --check-only --profile black app/
 
       - name: Run tests
         env:

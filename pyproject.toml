@@ -1,0 +1,43 @@
+[project]
+name = "issuepilot"
+version = "1.0.0"
+description = "AI-powered GitHub issue analysis assistant"
+readme = "README.md"
+requires-python = ">=3.9"
+
+[tool.black]
+line-length = 88
+target-version = ['py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+skip = [".venv", "venv", ".git"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+exclude = [".venv", "venv", ".git", "__pycache__"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

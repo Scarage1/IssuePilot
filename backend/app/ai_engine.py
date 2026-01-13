@@ -1,16 +1,19 @@
 """
 AI Engine for IssuePilot - Handles LLM interactions
 """
+
 import os
 from typing import Optional
+
 from openai import AsyncOpenAI
-from .schemas import GitHubIssue, AnalysisResult
-from .utils import truncate_text, clean_json_response
+
+from .schemas import AnalysisResult, GitHubIssue
+from .utils import clean_json_response, truncate_text
 
 
 class AIEngine:
     """AI Engine for analyzing GitHub issues"""
-    
+
     SYSTEM_PROMPT = """You are a senior open-source maintainer with extensive experience in triaging and resolving GitHub issues. Your task is to analyze GitHub issues and provide:
 1. Clear, concise summaries
 2. Accurate root cause analysis
@@ -63,11 +66,11 @@ Return ONLY valid JSON, no additional text."""
         self,
         api_key: Optional[str] = None,
         model: Optional[str] = None,
-        provider: str = "openai"
+        provider: str = "openai",
     ):
         """
         Initialize AI Engine
-        
+
         Args:
             api_key: API key for AI provider
             model: Model to use for analysis
@@ -76,88 +79,94 @@ Return ONLY valid JSON, no additional text."""
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.model = model or os.getenv("MODEL", "gpt-4o-mini")
         self.provider = provider or os.getenv("AI_PROVIDER", "openai")
-        
+
         if not self.api_key:
-            raise ValueError("AI API key is required. Set OPENAI_API_KEY environment variable.")
-        
+            raise ValueError(
+                "AI API key is required. Set OPENAI_API_KEY environment variable."
+            )
+
         self.client = AsyncOpenAI(api_key=self.api_key)
-    
+
     def _build_prompt(self, issue: GitHubIssue) -> str:
         """
         Build the user prompt from issue data
-        
+
         Args:
             issue: GitHub issue to analyze
-            
+
         Returns:
             Formatted prompt string
         """
         # Truncate long content
         body = truncate_text(issue.body or "No description provided.", 3000)
-        
+
         # Format comments
         if issue.comments:
-            comments = "\n\n".join([
-                f"Comment {i+1}:\n{truncate_text(comment, 500)}"
-                for i, comment in enumerate(issue.comments[:5])
-            ])
+            comments = "\n\n".join(
+                [
+                    f"Comment {i+1}:\n{truncate_text(comment, 500)}"
+                    for i, comment in enumerate(issue.comments[:5])
+                ]
+            )
         else:
             comments = "No comments yet."
-        
+
         return self.USER_PROMPT_TEMPLATE.format(
-            title=issue.title,
-            body=body,
-            comments=comments
+            title=issue.title, body=body, comments=comments
         )
-    
+
     async def analyze_issue(self, issue: GitHubIssue) -> AnalysisResult:
         """
         Analyze a GitHub issue using AI
-        
+
         Args:
             issue: GitHub issue to analyze
-            
+
         Returns:
             AnalysisResult with structured analysis
         """
         prompt = self._build_prompt(issue)
-        
+
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": self.SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
             temperature=0.3,
             max_tokens=2000,
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
         )
-        
+
         content = response.choices[0].message.content
         result = clean_json_response(content)
-        
+
         # Validate and build result
         return self._validate_result(result)
-    
+
     def _validate_result(self, result: dict) -> AnalysisResult:
         """
         Validate and normalize AI response
-        
+
         Args:
             result: Parsed JSON from AI response
-            
+
         Returns:
             Validated AnalysisResult
         """
         # Ensure all required fields exist
         summary = result.get("summary", "Unable to generate summary.")
         root_cause = result.get("root_cause", "Unable to determine root cause.")
-        
+
         # Ensure lists have proper content
         solution_steps = result.get("solution_steps", [])
         if not solution_steps or not isinstance(solution_steps, list):
-            solution_steps = ["Review the issue description", "Investigate the codebase", "Implement a fix"]
-        
+            solution_steps = [
+                "Review the issue description",
+                "Investigate the codebase",
+                "Implement a fix",
+            ]
+
         checklist = result.get("checklist", [])
         if not checklist or not isinstance(checklist, list):
             checklist = [
@@ -167,40 +176,49 @@ Return ONLY valid JSON, no additional text."""
                 "Identify affected files",
                 "Implement the fix",
                 "Write tests",
-                "Submit PR"
+                "Submit PR",
             ]
-        
+
         # Validate labels
         valid_labels = {
-            "bug", "docs", "enhancement", "feature", "question",
-            "good-first-issue", "help-wanted", "invalid", "wontfix"
+            "bug",
+            "docs",
+            "enhancement",
+            "feature",
+            "question",
+            "good-first-issue",
+            "help-wanted",
+            "invalid",
+            "wontfix",
         }
         labels = result.get("labels", [])
         if isinstance(labels, list):
             labels = [label for label in labels if label in valid_labels]
         else:
             labels = []
-        
+
         if not labels:
             labels = ["bug"]  # Default label
-        
+
         return AnalysisResult(
             summary=summary,
             root_cause=root_cause,
             solution_steps=solution_steps,
             checklist=checklist,
             labels=labels,
-            similar_issues=[]
+            similar_issues=[],
         )
-    
-    async def generate_pr_description(self, issue: GitHubIssue, analysis: AnalysisResult) -> str:
+
+    async def generate_pr_description(
+        self, issue: GitHubIssue, analysis: AnalysisResult
+    ) -> str:
         """
         Generate a PR description based on issue analysis
-        
+
         Args:
             issue: Original GitHub issue
             analysis: Analysis result
-            
+
         Returns:
             Formatted PR description
         """
@@ -227,11 +245,14 @@ Generate a PR description with:
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that writes clear, professional PR descriptions."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant that writes clear, professional PR descriptions.",
+                },
+                {"role": "user", "content": prompt},
             ],
             temperature=0.3,
-            max_tokens=1000
+            max_tokens=1000,
         )
-        
+
         return response.choices[0].message.content

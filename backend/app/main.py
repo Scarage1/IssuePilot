@@ -2,22 +2,24 @@
 IssuePilot - AI-Powered GitHub Issue Assistant
 Main FastAPI Application
 """
+
 from contextlib import asynccontextmanager
+
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 
+from .ai_engine import AIEngine
+from .duplicate_finder import DuplicateFinder
+from .github_client import GitHubClient
 from .schemas import (
-    AnalyzeRequest,
     AnalysisResult,
+    AnalyzeRequest,
+    ErrorResponse,
     ExportRequest,
     ExportResponse,
     HealthResponse,
-    ErrorResponse
 )
-from .github_client import GitHubClient
-from .ai_engine import AIEngine
-from .duplicate_finder import DuplicateFinder
 from .utils import generate_markdown_export
 
 # Load environment variables
@@ -41,7 +43,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 # Configure CORS
@@ -58,7 +60,7 @@ app.add_middleware(
 async def health_check():
     """
     Health check endpoint to verify the service is running.
-    
+
     Returns:
         HealthResponse with status "ok"
     """
@@ -69,7 +71,7 @@ async def health_check():
 async def root():
     """
     Root endpoint with API information.
-    
+
     Returns:
         Welcome message and API info
     """
@@ -78,7 +80,7 @@ async def root():
         "version": "1.0.0",
         "description": "AI-powered GitHub issue analysis assistant",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
     }
 
 
@@ -88,14 +90,14 @@ async def root():
     responses={
         400: {"model": ErrorResponse},
         404: {"model": ErrorResponse},
-        500: {"model": ErrorResponse}
+        500: {"model": ErrorResponse},
     },
-    tags=["Analysis"]
+    tags=["Analysis"],
 )
 async def analyze_issue(request: AnalyzeRequest):
     """
     Analyze a GitHub issue and return structured insights.
-    
+
     This endpoint:
     - Fetches issue details from GitHub
     - Generates AI-powered summary and analysis
@@ -103,10 +105,10 @@ async def analyze_issue(request: AnalyzeRequest):
     - Suggests solution steps and developer checklist
     - Recommends labels
     - Finds similar issues for duplicate detection
-    
+
     Args:
         request: AnalyzeRequest with repo and issue_number
-        
+
     Returns:
         AnalysisResult with complete analysis
     """
@@ -115,7 +117,7 @@ async def analyze_issue(request: AnalyzeRequest):
         github_client = GitHubClient(token=request.github_token)
         ai_engine = AIEngine()
         duplicate_finder = DuplicateFinder()
-        
+
         # Fetch issue from GitHub
         try:
             issue = await github_client.get_issue(request.repo, request.issue_number)
@@ -123,58 +125,54 @@ async def analyze_issue(request: AnalyzeRequest):
             if "404" in str(e):
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Issue #{request.issue_number} not found in {request.repo}"
+                    detail=f"Issue #{request.issue_number} not found in {request.repo}",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to fetch issue: {str(e)}"
+                detail=f"Failed to fetch issue: {str(e)}",
             )
-        
+
         # Analyze issue with AI
         try:
             analysis = await ai_engine.analyze_issue(issue)
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"AI analysis failed: {str(e)}"
+                detail=f"AI analysis failed: {str(e)}",
             )
-        
+
         # Find similar issues
         try:
-            existing_issues = await github_client.get_open_issues(request.repo, max_issues=50)
+            existing_issues = await github_client.get_open_issues(
+                request.repo, max_issues=50
+            )
             similar_issues = await duplicate_finder.find_similar_issues(
-                issue, 
-                existing_issues,
-                top_k=3
+                issue, existing_issues, top_k=3
             )
             analysis.similar_issues = similar_issues
         except Exception as e:
             # Don't fail if duplicate detection fails, just log
             print(f"Warning: Duplicate detection failed: {e}")
-        
+
         return analysis
-        
+
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Analysis failed: {str(e)}"
+            detail=f"Analysis failed: {str(e)}",
         )
 
 
-@app.post(
-    "/export",
-    response_model=ExportResponse,
-    tags=["Export"]
-)
+@app.post("/export", response_model=ExportResponse, tags=["Export"])
 async def export_markdown(request: ExportRequest):
     """
     Export analysis result to markdown format.
-    
+
     Args:
         request: ExportRequest with analysis data
-        
+
     Returns:
         ExportResponse with formatted markdown
     """
@@ -184,7 +182,7 @@ async def export_markdown(request: ExportRequest):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Export failed: {str(e)}"
+            detail=f"Export failed: {str(e)}",
         )
 
 
@@ -192,10 +190,10 @@ async def export_markdown(request: ExportRequest):
 async def check_rate_limit(github_token: str = None):
     """
     Check GitHub API rate limit status.
-    
+
     Args:
         github_token: Optional GitHub token
-        
+
     Returns:
         Rate limit information
     """
@@ -206,16 +204,12 @@ async def check_rate_limit(github_token: str = None):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to check rate limit: {str(e)}"
+            detail=f"Failed to check rate limit: {str(e)}",
         )
 
 
 # Run with: uvicorn app.main:app --reload
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True
-    )
+
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

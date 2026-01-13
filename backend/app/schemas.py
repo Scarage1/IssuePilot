@@ -1,12 +1,15 @@
 """
 Pydantic schemas for IssuePilot API
 """
+
 from typing import List, Optional
+
 from pydantic import BaseModel, Field
 
 
 class SimilarIssue(BaseModel):
     """Schema for similar issue results"""
+
     issue_number: int
     title: str
     url: str
@@ -15,13 +18,21 @@ class SimilarIssue(BaseModel):
 
 class AnalyzeRequest(BaseModel):
     """Request schema for /analyze endpoint"""
-    repo: str = Field(..., description="Repository in format 'owner/repo'", pattern=r"^[\w.-]+/[\w.-]+$")
+
+    repo: str = Field(
+        ...,
+        description="Repository in format 'owner/repo'",
+        pattern=r"^[\w.-]+/[\w.-]+$",
+    )
     issue_number: int = Field(..., gt=0, description="Issue number to analyze")
-    github_token: Optional[str] = Field(None, description="Optional GitHub token for higher rate limits")
+    github_token: Optional[str] = Field(
+        None, description="Optional GitHub token for higher rate limits"
+    )
 
 
 class AnalysisResult(BaseModel):
     """Response schema for issue analysis"""
+
     summary: str
     root_cause: str
     solution_steps: List[str]
@@ -32,21 +43,25 @@ class AnalysisResult(BaseModel):
 
 class ExportRequest(BaseModel):
     """Request schema for /export endpoint"""
+
     analysis: AnalysisResult
 
 
 class ExportResponse(BaseModel):
     """Response schema for markdown export"""
+
     markdown: str
 
 
 class HealthResponse(BaseModel):
     """Response schema for health check"""
+
     status: str = "ok"
 
 
 class GitHubIssue(BaseModel):
     """Schema for GitHub issue data"""
+
     number: int
     title: str
     body: Optional[str] = ""
@@ -60,5 +75,6 @@ class GitHubIssue(BaseModel):
 
 class ErrorResponse(BaseModel):
     """Schema for error responses"""
+
     error: str
     detail: Optional[str] = None
