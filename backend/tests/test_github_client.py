@@ -64,7 +64,7 @@ class TestGitHubClient:
             client = GitHubClient()
             
             with pytest.raises(httpx.ReadTimeout):
-                await client.get_issue("owner/repo", 1)  
+                await client.get_issue("owner/repo", 1)
     
     @pytest.mark.asyncio
     async def test_get_issue_with_missing_body(self):
