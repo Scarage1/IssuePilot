@@ -6,6 +6,43 @@ This document describes the architecture and design decisions for IssuePilot.
 
 IssuePilot is designed as a modular, extensible system for analyzing GitHub issues using AI.
 
+## How It Works - Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                              IssuePilot Analysis Flow                                    │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────┐     ┌──────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────┐
+  │  User    │────▶│ CLI/API  │────▶│ GitHub API   │────▶│ Issue Data   │────▶│  Prompt  │
+  │ Request  │     │ Endpoint │     │ Fetch        │     │ + Comments   │     │ Builder  │
+  └──────────┘     └──────────┘     └──────────────┘     └──────────────┘     └────┬─────┘
+                                                                                    │
+                                                                                    ▼
+  ┌──────────┐     ┌──────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────┐
+  │  Output  │◀────│ Markdown │◀────│ Duplicate    │◀────│    JSON      │◀────│   LLM    │
+  │  (JSON/  │     │ Generator│     │ Finder       │     │  Validator   │     │ (OpenAI) │
+  │   MD)    │     │          │     │ (TF-IDF)     │     │              │     │          │
+  └──────────┘     └──────────┘     └──────────────┘     └──────────────┘     └──────────┘
+```
+
+### Step-by-Step Flow
+
+1. **User Request** → User submits repo + issue number via CLI or API
+2. **CLI/API Endpoint** → FastAPI receives and validates the request
+3. **GitHub API Fetch** → Fetches issue details, comments, and open issues
+4. **Issue Data** → Structures the raw data for analysis
+5. **Prompt Builder** → Constructs optimized prompt with issue context
+6. **LLM (OpenAI)** → AI generates analysis (summary, root cause, steps)
+7. **JSON Validator** → Validates and cleans the AI response
+8. **Duplicate Finder** → Compares against open issues using TF-IDF
+9. **Markdown Generator** → Formats output if export requested
+10. **Output** → Returns JSON response or markdown file
+
+---
+
+## System Architecture
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              IssuePilot System                               │

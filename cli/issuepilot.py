@@ -218,7 +218,7 @@ Examples:
   issuepilot analyze --repo owner/repo --issue 100 --token YOUR_TOKEN --output analysis.md
   issuepilot health
 
-For more information, visit: https://github.com/issuepilot/issuepilot
+For more information, visit: https://github.com/Scarage1/IssuePilot
         """
     )
     

@@ -43,7 +43,7 @@ cd issuepilot
 3. Add the upstream remote:
 
 ```bash
-git remote add upstream https://github.com/issuepilot/issuepilot.git
+git remote add upstream https://github.com/Scarage1/IssuePilot.git
 ```
 
 ---

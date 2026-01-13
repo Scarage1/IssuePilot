@@ -1,0 +1,49 @@
+{
+  "summary": "This issue reports a hydration mismatch error occurring when using dynamic imports with SSR in Next.js. Users are seeing console warnings about server/client HTML mismatches. The issue appears when components render differently between server and client due to browser-specific APIs being called during SSR.",
+  "root_cause": "The likely root cause is that a component is using browser-specific APIs (like `window` or `localStorage`) during server-side rendering, causing the server HTML to differ from the client-rendered HTML. This creates a hydration mismatch because React expects the initial client render to match the server output exactly.",
+  "solution_steps": [
+    "Identify the component causing the mismatch by checking the console warnings for specific component names",
+    "Wrap browser-specific code in useEffect() hook which only runs on the client",
+    "Add typeof window !== 'undefined' checks before accessing browser APIs",
+    "Use Next.js dynamic imports with { ssr: false } option for client-only components",
+    "Test with SSR disabled temporarily to confirm the component is the source of the issue",
+    "Consider using the 'use client' directive for components that require browser APIs"
+  ],
+  "checklist": [
+    "Read and understand the Next.js hydration error documentation",
+    "Set up a local Next.js development environment",
+    "Reproduce the issue with a minimal example",
+    "Identify all browser-specific API usage in the affected components",
+    "Implement proper client-side checks using useEffect or dynamic imports",
+    "Test the fix with SSR enabled and disabled",
+    "Verify no hydration warnings remain in the console",
+    "Add a test case to prevent regression",
+    "Submit PR with detailed description of the fix"
+  ],
+  "labels": [
+    "bug",
+    "ssr",
+    "hydration",
+    "good-first-issue"
+  ],
+  "similar_issues": [
+    {
+      "issue_number": 11234,
+      "title": "Hydration failed because the initial UI does not match",
+      "url": "https://github.com/vercel/next.js/issues/11234",
+      "similarity": 0.89
+    },
+    {
+      "issue_number": 10456,
+      "title": "SSR mismatch with dynamic content",
+      "url": "https://github.com/vercel/next.js/issues/10456",
+      "similarity": 0.78
+    },
+    {
+      "issue_number": 9821,
+      "title": "useLayoutEffect warning during SSR",
+      "url": "https://github.com/vercel/next.js/issues/9821",
+      "similarity": 0.72
+    }
+  ]
+}

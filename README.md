@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
+[![Tests](https://github.com/Scarage1/IssuePilot/actions/workflows/test.yml/badge.svg)](https://github.com/Scarage1/IssuePilot/actions/workflows/test.yml)
 
 **AI-powered GitHub issue analysis assistant for open-source maintainers and contributors**
 
@@ -16,17 +17,51 @@ IssuePilot automatically analyzes GitHub issues and provides:
 
 ---
 
+## 🎯 Project Vision
+
+### The Problem
+
+Open-source maintainers spend **hours** triaging issues:
+- Reading long, unstructured bug reports
+- Identifying duplicates manually
+- Writing the same guidance repeatedly
+- Labeling issues inconsistently
+
+Contributors struggle too:
+- Understanding complex issues
+- Knowing where to start
+- Finding related issues
+
+### The Solution
+
+IssuePilot uses AI to **automate issue analysis**, giving maintainers and contributors instant insights. One API call or CLI command transforms a wall of text into actionable intelligence.
+
+### What Makes It Different
+
+| Feature | Traditional | IssuePilot |
+|---------|-------------|------------|
+| Issue Summary | Manual reading | AI-generated in seconds |
+| Root Cause | Guesswork | AI analysis with context |
+| Action Items | Write from scratch | Auto-generated checklist |
+| Duplicates | Manual search | Automatic similarity detection |
+| Labels | Inconsistent | AI-suggested categories |
+
+---
+
 ## 📖 Table of Contents
 
+- [Project Vision](#-project-vision)
 - [Features](#-features)
 - [Quick Start](#-quick-start)
 - [Installation](#-installation)
 - [Usage](#-usage)
+- [Examples](#-examples)
 - [API Documentation](#-api-documentation)
 - [Configuration](#-configuration)
 - [Architecture](#-architecture)
 - [Contributing](#-contributing)
 - [Roadmap](#-roadmap)
+- [Good First Issues](#-good-first-issues)
 - [License](#-license)
 
 ---
@@ -55,15 +90,17 @@ IssuePilot automatically analyzes GitHub issues and provides:
 ### 1. Clone & Setup
 
 ```bash
-git clone https://github.com/issuepilot/issuepilot.git
-cd issuepilot
+git clone https://github.com/Scarage1/IssuePilot.git
+cd IssuePilot
 
 # Backend setup
 cd backend
 python -m venv venv
 
-# Windows
-venv\Scripts\activate
+# Windows (PowerShell)
+.\venv\Scripts\Activate.ps1
+# Windows (Command Prompt)
+venv\Scripts\activate.bat
 # macOS/Linux
 source venv/bin/activate
 
@@ -106,7 +143,7 @@ curl -X POST http://localhost:8000/analyze \
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate  # Windows: .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
@@ -199,6 +236,31 @@ See [API Documentation](docs/api.md) for complete details.
 
 ---
 
+## 📁 Examples
+
+Check out the [examples/](examples/) folder to see IssuePilot in action:
+
+| File | Description |
+|------|-------------|
+| [example_output.json](examples/example_output.json) | Raw JSON response from the API |
+| [example_output.md](examples/example_output.md) | Formatted markdown export |
+| [sample_request.json](examples/sample_request.json) | Sample API request payload |
+
+### Sample Output Preview
+
+```json
+{
+  "summary": "This issue reports a hydration mismatch error...",
+  "root_cause": "The component uses browser-specific APIs during SSR...",
+  "solution_steps": ["Identify the component...", "Wrap in useEffect..."],
+  "checklist": ["Set up local environment", "Reproduce the issue", "..."],
+  "labels": ["bug", "ssr", "good-first-issue"],
+  "similar_issues": [{"issue_number": 11234, "similarity": 0.89}]
+}
+```
+
+---
+
 ## ⚙️ Configuration
 
 Create a `.env` file in the `backend` directory:
@@ -223,6 +285,8 @@ SIMILARITY_THRESHOLD=0.75
 | `AI_PROVIDER` | No | `openai` | AI provider to use |
 | `MODEL` | No | `gpt-4o-mini` | AI model |
 | `SIMILARITY_THRESHOLD` | No | `0.75` | Duplicate detection threshold |
+
+See [Configuration Reference](docs/configuration.md) for detailed setup guide and troubleshooting.
 
 ---
 
@@ -258,23 +322,69 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 - 🔧 Submit pull requests
 - 🎨 Improve prompts
 
+### Developer Setup
+
+See [Development Guide](docs/development.md) for:
+- Running the backend locally
+- Running tests
+- Linting and formatting
+- Building packages
+
 ---
 
 ## 🗺️ Roadmap
 
-### v1.0 (MVP) ✅
-- [x] Backend + CLI
-- [x] AI Summary + checklist
-- [x] Export markdown
+### v1.0 - Core Features ✅
+- [x] FastAPI backend with REST API
+- [x] CLI tool for terminal usage
+- [x] AI-powered issue summarization
+- [x] Root cause analysis
+- [x] Developer checklists
+- [x] Markdown export
 
-### v1.5
-- [x] Duplicate detection
-- [x] Label suggestion
+### v1.1 - Enhanced Detection ✅
+- [x] Duplicate/similar issue detection
+- [x] TF-IDF similarity (offline mode)
+- [x] Label suggestions
 
-### v2.0
-- [ ] GitHub Action integration
+### v1.2 - Improvements (Next)
+- [ ] OpenAI embeddings for better similarity
+- [ ] Caching layer for repeated analyses
+- [ ] Batch analysis for multiple issues
+- [ ] Better error messages and recovery
+
+### v2.0 - Automation
+- [ ] GitHub Action for auto-commenting
+- [ ] Webhook integration
 - [ ] Dashboard UI
-- [ ] PR draft generator
+- [ ] PR draft generator from issues
+
+### v3.0 - Enterprise
+- [ ] Self-hosted LLM support
+- [ ] Team analytics
+- [ ] Custom prompt templates
+- [ ] Multi-repo analysis
+
+---
+
+## 🌱 Good First Issues
+
+Want to contribute but don't know where to start? Here are some beginner-friendly tasks:
+
+| Task | Difficulty | Skills |
+|------|------------|--------|
+| Improve AI prompts for better summaries | 🟢 Easy | Prompt engineering |
+| Add more detailed error messages | 🟢 Easy | Python |
+| Add request/response logging | 🟢 Easy | Python, FastAPI |
+| Implement response caching | 🟡 Medium | Python, Redis |
+| Add support for GitLab issues | 🟡 Medium | Python, APIs |
+| Create GitHub Action | 🟡 Medium | GitHub Actions, YAML |
+| Add rate limit retry logic | 🟢 Easy | Python, httpx |
+| Write more test cases | 🟢 Easy | Python, pytest |
+| Add CLI progress spinner | 🟢 Easy | Python, Click |
+| Docker containerization | 🟡 Medium | Docker |
+
+Check our [Issues](https://github.com/Scarage1/IssuePilot/issues) page for more!
 
 ---
 

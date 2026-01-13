@@ -14,10 +14,10 @@ setup(
     description="AI-powered GitHub issue analysis assistant",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/issuepilot/issuepilot",
+    url="https://github.com/Scarage1/IssuePilot",
     project_urls={
-        "Bug Tracker": "https://github.com/issuepilot/issuepilot/issues",
-        "Documentation": "https://github.com/issuepilot/issuepilot/docs",
+        "Bug Tracker": "https://github.com/Scarage1/IssuePilot/issues",
+        "Documentation": "https://github.com/Scarage1/IssuePilot/tree/main/docs",
     },
     classifiers=[
         "Development Status :: 4 - Beta",
