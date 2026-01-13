@@ -108,8 +108,8 @@ class TestGitHubClient:
             "state": "open",
             "labels": [],
             "html_url": "url",
-            "created_at": "2024-01-01",
-            "updated_at": "2024-01-01",
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
         }
 
         with patch("httpx.AsyncClient") as mock_client:
