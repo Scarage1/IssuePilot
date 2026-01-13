@@ -221,7 +221,7 @@ class TestGitHubClient:
             }
         }
 
-        with patch("httpx.AsyncClient") as mock_client:
+        with patch('httpx.AsyncClient') as mock_client:
             mock_response = MagicMock()
             mock_response.json.return_value = mock_rate_data
             mock_response.raise_for_status = MagicMock()
