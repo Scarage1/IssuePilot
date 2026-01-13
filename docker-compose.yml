@@ -1,0 +1,68 @@
+# IssuePilot Docker Compose Configuration
+# Usage: docker-compose up -d
+
+version: '3.8'
+
+services:
+  # Backend API Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: issuepilot-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Required: Set your OpenAI API key
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # Optional: Use Gemini instead of OpenAI
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - AI_PROVIDER=${AI_PROVIDER:-openai}
+      - MODEL=${MODEL:-gpt-4o-mini}
+      # Optional: GitHub token for higher rate limits
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      # Cache settings
+      - CACHE_TTL=${CACHE_TTL:-3600}
+      - MAX_CACHE_SIZE=${MAX_CACHE_SIZE:-1000}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - issuepilot-network
+    volumes:
+      - backend-cache:/app/.cache
+
+  # Frontend Web Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: issuepilot-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - issuepilot-network
+
+networks:
+  issuepilot-network:
+    driver: bridge
+
+volumes:
+  backend-cache:
+    driver: local

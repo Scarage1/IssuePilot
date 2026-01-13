@@ -10,25 +10,44 @@ from contextlib import asynccontextmanager
 
 from cachetools import TTLCache
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, status, Header, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 
 from .ai_engine import AIEngine
 from .duplicate_finder import DuplicateFinder
 from .github_client import GitHubClient
+from .repository import AnalysisRepository
 from .schemas import (
+    AnalysisHistoryItem,
+    AnalysisHistoryResponse,
     AnalysisResult,
     AnalyzeRequest,
+    BatchAnalyzeRequest,
+    BatchAnalysisItem,
+    BatchAnalysisResult,
+    DatabaseStats,
     DependencyStatus,
     ErrorResponse,
     ExportRequest,
     ExportResponse,
     HealthResponse,
+    StoredAnalysis,
 )
-from .utils import generate_markdown_export
+from .utils import generate_markdown_export, generate_html_export
+from .webhook import (
+    IssueWebhookPayload,
+    WebhookResponse,
+    WebhookConfig,
+    get_webhook_config,
+    verify_webhook_signature,
+    should_analyze_issue,
+    format_webhook_log,
+)
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from .env file in parent directory
+from pathlib import Path
+env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 # Configure logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -255,6 +274,20 @@ async def analyze_issue(request: AnalyzeRequest, http_request: Request):
         analysis_cache[cache_key] = analysis
         logger.info(f"💾 Cached result for {cache_key}")
 
+        # Save to database if enabled
+        if AnalysisRepository.is_available():
+            try:
+                AnalysisRepository.save_analysis(
+                    repo=request.repo,
+                    issue_number=request.issue_number,
+                    result=analysis,
+                    issue_title=issue.title,
+                    ai_provider=ai_engine.get_provider_name(),
+                )
+                logger.info(f"💾 Saved to database: {cache_key}")
+            except Exception as e:
+                logger.warning(f"Failed to save to database: {e}")
+
         return analysis
 
     except HTTPException:
@@ -264,6 +297,126 @@ async def analyze_issue(request: AnalyzeRequest, http_request: Request):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Analysis failed: {str(e)}",
+        )
+
+
+@app.post(
+    "/analyze/batch",
+    response_model=BatchAnalysisResult,
+    responses={
+        400: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+    tags=["Analysis"],
+)
+async def analyze_batch(request: BatchAnalyzeRequest, http_request: Request):
+    """
+    Analyze multiple GitHub issues in batch.
+
+    This endpoint processes up to 10 issues at once, returning results
+    for each issue including any failures.
+
+    Supports caching - use X-No-Cache header to bypass cache.
+
+    Args:
+        request: BatchAnalyzeRequest with repo and issue_numbers list
+        http_request: HTTP request for cache control headers
+
+    Returns:
+        BatchAnalysisResult with results for all issues
+    """
+    no_cache = http_request.headers.get("X-No-Cache", "").lower() == "true"
+    results: list[BatchAnalysisItem] = []
+    successful = 0
+    failed = 0
+
+    logger.info(
+        f"🔄 Batch analyzing {len(request.issue_numbers)} issues in {request.repo}"
+    )
+
+    try:
+        # Initialize clients once for all issues
+        github_client = GitHubClient(token=request.github_token)
+        ai_engine = AIEngine()
+        duplicate_finder = DuplicateFinder()
+
+        # Pre-fetch all open issues for duplicate detection
+        existing_issues = []
+        try:
+            existing_issues = await github_client.get_open_issues(
+                request.repo, max_issues=50
+            )
+        except Exception as e:
+            logger.warning(f"Could not fetch existing issues for duplicate detection: {e}")
+
+        # Process each issue
+        for issue_number in request.issue_numbers:
+            cache_key = get_cache_key(request.repo, issue_number)
+
+            # Check cache first
+            if not no_cache and cache_key in analysis_cache:
+                logger.info(f"📦 Cache hit for {cache_key}")
+                results.append(BatchAnalysisItem(
+                    issue_number=issue_number,
+                    success=True,
+                    result=analysis_cache[cache_key]
+                ))
+                successful += 1
+                continue
+
+            try:
+                # Fetch issue
+                issue = await github_client.get_issue(request.repo, issue_number)
+
+                # Analyze with AI
+                analysis = await ai_engine.analyze_issue(issue)
+
+                # Find similar issues
+                try:
+                    similar_issues = await duplicate_finder.find_similar_issues(
+                        issue, existing_issues, top_k=3
+                    )
+                    analysis.similar_issues = similar_issues
+                except Exception as e:
+                    logger.warning(f"Duplicate detection failed for #{issue_number}: {e}")
+
+                # Cache the result
+                analysis_cache[cache_key] = analysis
+
+                results.append(BatchAnalysisItem(
+                    issue_number=issue_number,
+                    success=True,
+                    result=analysis
+                ))
+                successful += 1
+                logger.info(f"✅ Analyzed #{issue_number}")
+
+            except Exception as e:
+                error_msg = str(e)
+                if "404" in error_msg:
+                    error_msg = f"Issue #{issue_number} not found"
+                
+                results.append(BatchAnalysisItem(
+                    issue_number=issue_number,
+                    success=False,
+                    error=error_msg
+                ))
+                failed += 1
+                logger.warning(f"❌ Failed to analyze #{issue_number}: {error_msg}")
+
+        return BatchAnalysisResult(
+            repo=request.repo,
+            total=len(request.issue_numbers),
+            successful=successful,
+            failed=failed,
+            results=results
+        )
+
+    except Exception as e:
+        logger.error(f"Batch analysis failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Batch analysis failed: {str(e)}",
         )
 
 
@@ -280,13 +433,44 @@ async def export_markdown(request: ExportRequest):
     """
     try:
         logger.debug("Generating markdown export")
-        markdown = generate_markdown_export(request.analysis)
+        markdown = generate_markdown_export(
+            request.analysis,
+            repo=request.repo or "",
+            issue_number=request.issue_number or 0
+        )
         return ExportResponse(markdown=markdown)
     except Exception as e:
         logger.error(f"Export failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Export failed: {str(e)}",
+        )
+
+
+@app.post("/export/html", tags=["Export"])
+async def export_html(request: ExportRequest):
+    """
+    Export analysis result to HTML format.
+
+    Args:
+        request: ExportRequest with analysis data
+
+    Returns:
+        HTML content as string
+    """
+    try:
+        logger.debug("Generating HTML export")
+        html = generate_html_export(
+            request.analysis,
+            repo=request.repo or "",
+            issue_number=request.issue_number or 0
+        )
+        return {"html": html}
+    except Exception as e:
+        logger.error(f"HTML export failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"HTML export failed: {str(e)}",
         )
 
 
@@ -342,6 +526,321 @@ async def check_rate_limit(github_token: str = None):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to check rate limit: {str(e)}",
         )
+
+
+# =============================================================================
+# Database / History Endpoints
+# =============================================================================
+
+
+@app.get("/history", response_model=AnalysisHistoryResponse, tags=["History"])
+async def get_history(repo: str = None, limit: int = 50, offset: int = 0):
+    """
+    Get analysis history from the database.
+
+    Database persistence is optional. If not configured, returns empty list.
+
+    Args:
+        repo: Optional repository filter (format: owner/repo)
+        limit: Maximum number of records to return (default 50)
+        offset: Number of records to skip (for pagination)
+
+    Returns:
+        AnalysisHistoryResponse with list of analysis summaries
+    """
+    if not AnalysisRepository.is_available():
+        return AnalysisHistoryResponse(items=[], total=0)
+
+    try:
+        items = AnalysisRepository.get_history(repo=repo, limit=limit, offset=offset)
+        return AnalysisHistoryResponse(
+            items=[AnalysisHistoryItem(**item) for item in items],
+            total=len(items)
+        )
+    except Exception as e:
+        logger.error(f"Failed to get history: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get history: {str(e)}",
+        )
+
+
+@app.get(
+    "/history/{repo:path}/{issue_number}",
+    response_model=StoredAnalysis,
+    responses={404: {"model": ErrorResponse}},
+    tags=["History"],
+)
+async def get_stored_analysis(repo: str, issue_number: int):
+    """
+    Get a stored analysis by repository and issue number.
+
+    Args:
+        repo: Repository (format: owner/repo)
+        issue_number: Issue number
+
+    Returns:
+        StoredAnalysis with full analysis data
+    """
+    if not AnalysisRepository.is_available():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Database not configured",
+        )
+
+    try:
+        record = AnalysisRepository.get_analysis(repo, issue_number)
+        if not record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No stored analysis found for {repo}#{issue_number}",
+            )
+        return StoredAnalysis(**record)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get stored analysis: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get analysis: {str(e)}",
+        )
+
+
+@app.delete(
+    "/history/{repo:path}/{issue_number}",
+    responses={404: {"model": ErrorResponse}},
+    tags=["History"],
+)
+async def delete_stored_analysis(repo: str, issue_number: int):
+    """
+    Delete a stored analysis by repository and issue number.
+
+    Args:
+        repo: Repository (format: owner/repo)
+        issue_number: Issue number
+
+    Returns:
+        Confirmation message
+    """
+    if not AnalysisRepository.is_available():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Database not configured",
+        )
+
+    try:
+        deleted = AnalysisRepository.delete_analysis(repo, issue_number)
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No stored analysis found for {repo}#{issue_number}",
+            )
+        logger.info(f"🗑️ Deleted stored analysis for {repo}#{issue_number}")
+        return {"message": f"Deleted analysis for {repo}#{issue_number}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete analysis: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete analysis: {str(e)}",
+        )
+
+
+@app.get("/database/stats", response_model=DatabaseStats, tags=["Utilities"])
+async def database_stats():
+    """
+    Get database statistics.
+
+    Returns:
+        DatabaseStats with database status and counts
+    """
+    stats = AnalysisRepository.get_stats()
+    return DatabaseStats(**stats)
+
+
+# =============================================================================
+# Webhook Endpoints
+# =============================================================================
+
+
+async def analyze_issue_background(repo: str, issue_number: int, github_token: str = None):
+    """Background task to analyze an issue from a webhook"""
+    try:
+        logger.info(f"🔄 Background analysis started for {repo}#{issue_number}")
+        
+        # Initialize clients
+        github_client = GitHubClient(token=github_token)
+        ai_engine = AIEngine()
+        duplicate_finder = DuplicateFinder()
+        
+        # Fetch issue
+        issue = await github_client.get_issue(repo, issue_number)
+        
+        # Analyze with AI
+        analysis = await ai_engine.analyze_issue(issue)
+        
+        # Find similar issues
+        try:
+            existing_issues = await github_client.get_open_issues(repo, max_issues=50)
+            similar_issues = await duplicate_finder.find_similar_issues(
+                issue, existing_issues, top_k=3
+            )
+            analysis.similar_issues = similar_issues
+        except Exception as e:
+            logger.warning(f"Duplicate detection failed: {e}")
+        
+        # Cache the result
+        cache_key = get_cache_key(repo, issue_number)
+        analysis_cache[cache_key] = analysis
+        
+        # Save to database if enabled
+        if AnalysisRepository.is_available():
+            AnalysisRepository.save_analysis(
+                repo=repo,
+                issue_number=issue_number,
+                result=analysis,
+                issue_title=issue.title,
+                ai_provider=ai_engine.get_provider_name(),
+            )
+            logger.info(f"💾 Saved webhook analysis to database: {repo}#{issue_number}")
+        
+        logger.info(f"✅ Background analysis completed for {repo}#{issue_number}")
+        
+    except Exception as e:
+        logger.error(f"❌ Background analysis failed for {repo}#{issue_number}: {e}")
+
+
+@app.post(
+    "/webhook/github",
+    response_model=WebhookResponse,
+    tags=["Webhook"],
+)
+async def github_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    x_hub_signature_256: str = Header(None, alias="X-Hub-Signature-256"),
+    x_github_event: str = Header(None, alias="X-GitHub-Event"),
+):
+    """
+    GitHub webhook endpoint for automatic issue analysis.
+
+    This endpoint receives GitHub webhook events and automatically
+    analyzes new or updated issues based on configuration.
+
+    Setup:
+    1. Set GITHUB_WEBHOOK_SECRET environment variable
+    2. Configure webhook in GitHub repo settings:
+       - Payload URL: https://your-domain/webhook/github
+       - Content type: application/json
+       - Secret: same as GITHUB_WEBHOOK_SECRET
+       - Events: Issues
+
+    Configuration environment variables:
+    - GITHUB_WEBHOOK_SECRET: Secret for signature verification
+    - WEBHOOK_AUTO_ANALYZE_OPEN: Auto-analyze on issue open (default: true)
+    - WEBHOOK_AUTO_ANALYZE_EDIT: Auto-analyze on issue edit (default: false)
+    - WEBHOOK_AUTO_ANALYZE_LABEL: Auto-analyze on label add (default: false)
+    - WEBHOOK_REQUIRED_LABEL: Only analyze if this label is present
+    - WEBHOOK_EXCLUDED_LABELS: Comma-separated list of labels to skip
+
+    Returns:
+        WebhookResponse with status and analysis info
+    """
+    config = get_webhook_config()
+    
+    # Check if webhooks are enabled
+    if not config.enabled:
+        logger.warning("Webhook received but not configured (no secret)")
+        return WebhookResponse(
+            status="skipped",
+            message="Webhooks not configured",
+            analysis_triggered=False,
+        )
+    
+    # Get raw body for signature verification
+    body = await request.body()
+    
+    # Verify signature
+    if not verify_webhook_signature(body, x_hub_signature_256 or ""):
+        logger.warning("Webhook signature verification failed")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid webhook signature",
+        )
+    
+    # Only handle issue events
+    if x_github_event != "issues":
+        return WebhookResponse(
+            status="ignored",
+            message=f"Event type '{x_github_event}' not handled",
+            analysis_triggered=False,
+        )
+    
+    # Parse payload
+    try:
+        payload_dict = await request.json()
+        payload = IssueWebhookPayload(**payload_dict)
+    except Exception as e:
+        logger.error(f"Failed to parse webhook payload: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid webhook payload: {str(e)}",
+        )
+    
+    logger.info(f"📨 Webhook received: {format_webhook_log(payload)}")
+    
+    # Check if we should analyze
+    should_analyze, reason = should_analyze_issue(payload, config)
+    
+    if not should_analyze:
+        logger.info(f"⏭️ Skipping analysis: {reason}")
+        return WebhookResponse(
+            status="skipped",
+            message=reason,
+            action=payload.action,
+            repo=payload.repository.full_name,
+            issue_number=payload.issue.number,
+            analysis_triggered=False,
+        )
+    
+    # Trigger background analysis
+    repo = payload.repository.full_name
+    issue_number = payload.issue.number
+    
+    # Get GitHub token from environment for webhook requests
+    github_token = os.getenv("GITHUB_TOKEN")
+    
+    background_tasks.add_task(
+        analyze_issue_background,
+        repo=repo,
+        issue_number=issue_number,
+        github_token=github_token,
+    )
+    
+    logger.info(f"🚀 Triggered background analysis for {repo}#{issue_number}")
+    
+    return WebhookResponse(
+        status="accepted",
+        message=reason,
+        action=payload.action,
+        repo=repo,
+        issue_number=issue_number,
+        analysis_triggered=True,
+    )
+
+
+@app.get("/webhook/config", response_model=WebhookConfig, tags=["Webhook"])
+async def webhook_config():
+    """
+    Get current webhook configuration.
+
+    Returns information about webhook settings without exposing secrets.
+
+    Returns:
+        WebhookConfig with current settings
+    """
+    return get_webhook_config()
 
 
 # Run with: uvicorn app.main:app --reload

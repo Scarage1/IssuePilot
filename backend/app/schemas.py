@@ -41,10 +41,50 @@ class AnalysisResult(BaseModel):
     similar_issues: List[SimilarIssue] = []
 
 
+class BatchAnalyzeRequest(BaseModel):
+    """Request schema for /analyze/batch endpoint"""
+
+    repo: str = Field(
+        ...,
+        description="Repository in format 'owner/repo'",
+        pattern=r"^[\w.-]+/[\w.-]+$",
+    )
+    issue_numbers: List[int] = Field(
+        ...,
+        min_length=1,
+        max_length=10,
+        description="List of issue numbers to analyze (max 10)"
+    )
+    github_token: Optional[str] = Field(
+        None, description="Optional GitHub token for higher rate limits"
+    )
+
+
+class BatchAnalysisItem(BaseModel):
+    """Single issue result in batch analysis"""
+
+    issue_number: int
+    success: bool
+    result: Optional[AnalysisResult] = None
+    error: Optional[str] = None
+
+
+class BatchAnalysisResult(BaseModel):
+    """Response schema for batch analysis"""
+
+    repo: str
+    total: int
+    successful: int
+    failed: int
+    results: List[BatchAnalysisItem]
+
+
 class ExportRequest(BaseModel):
     """Request schema for /export endpoint"""
 
     analysis: AnalysisResult
+    repo: Optional[str] = Field(None, description="Repository name (optional)")
+    issue_number: Optional[int] = Field(None, description="Issue number (optional)")
 
 
 class ExportResponse(BaseModel):
@@ -93,3 +133,44 @@ class ErrorResponse(BaseModel):
 
     error: str
     detail: Optional[str] = None
+
+
+class StoredAnalysis(BaseModel):
+    """Schema for a stored analysis record"""
+
+    id: int
+    repo: str
+    issue_number: int
+    issue_title: Optional[str] = None
+    result: AnalysisResult
+    ai_provider: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class AnalysisHistoryItem(BaseModel):
+    """Schema for analysis history list item"""
+
+    id: int
+    repo: str
+    issue_number: int
+    issue_title: Optional[str] = None
+    summary: str
+    labels: List[str]
+    ai_provider: Optional[str] = None
+    created_at: str
+
+
+class AnalysisHistoryResponse(BaseModel):
+    """Response schema for analysis history"""
+
+    items: List[AnalysisHistoryItem]
+    total: int
+
+
+class DatabaseStats(BaseModel):
+    """Schema for database statistics"""
+
+    enabled: bool
+    total_analyses: Optional[int] = None
+    unique_repos: Optional[int] = None

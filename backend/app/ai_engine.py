@@ -1,11 +1,14 @@
 """
 AI Engine for IssuePilot - Handles LLM interactions
+Supports OpenAI and Google Gemini
 """
 
+import json
 import logging
 import os
 from typing import Optional
 
+import google.generativeai as genai
 from openai import (
     APIError,
     AsyncOpenAI,
@@ -20,13 +23,25 @@ from .utils import clean_json_response, truncate_text
 logger = logging.getLogger("issuepilot.ai")
 
 # Valid models for OpenAI
-VALID_MODELS = [
+VALID_OPENAI_MODELS = [
     "gpt-4o",
     "gpt-4o-mini",
     "gpt-4-turbo",
     "gpt-4",
     "gpt-3.5-turbo",
     "gpt-3.5-turbo-16k",
+]
+
+# Valid models for Gemini
+VALID_GEMINI_MODELS = [
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-8b",
+    "gemini-1.5-pro",
+    "gemini-pro",
 ]
 
 
@@ -115,7 +130,7 @@ Return ONLY valid JSON, no additional text."""
         self,
         api_key: Optional[str] = None,
         model: Optional[str] = None,
-        provider: str = "openai",
+        provider: Optional[str] = None,
     ):
         """
         Initialize AI Engine
@@ -123,40 +138,58 @@ Return ONLY valid JSON, no additional text."""
         Args:
             api_key: API key for AI provider
             model: Model to use for analysis
-            provider: AI provider (currently supports 'openai')
+            provider: AI provider ('openai' or 'gemini')
 
         Raises:
             APIKeyError: If API key is not configured
             ModelError: If model is invalid
         """
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        self.model = model or os.getenv("MODEL", "gpt-4o-mini")
         self.provider = provider or os.getenv("AI_PROVIDER", "openai")
+        
+        # Get appropriate API key based on provider
+        if self.provider == "gemini":
+            self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+            self.model = model or os.getenv("MODEL", "gemini-2.0-flash")
+            valid_models = VALID_GEMINI_MODELS
+            key_name = "GEMINI_API_KEY"
+            key_url = "https://aistudio.google.com/apikey"
+        else:
+            self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+            self.model = model or os.getenv("MODEL", "gpt-4o-mini")
+            valid_models = VALID_OPENAI_MODELS
+            key_name = "OPENAI_API_KEY"
+            key_url = "https://platform.openai.com/api-keys"
 
         # Validate API key
         if not self.api_key:
             raise APIKeyError(
-                "OpenAI API key not configured. "
-                "Set OPENAI_API_KEY in your .env file or environment variables. "
-                "Get your API key at: https://platform.openai.com/api-keys"
+                f"{self.provider.capitalize()} API key not configured. "
+                f"Set {key_name} in your .env file or environment variables. "
+                f"Get your API key at: {key_url}"
             )
 
         if len(self.api_key) < 20:
             raise APIKeyError(
-                "OpenAI API key appears to be invalid (too short). "
-                "Please check your OPENAI_API_KEY configuration."
+                f"{self.provider.capitalize()} API key appears to be invalid (too short). "
+                f"Please check your {key_name} configuration."
             )
 
         # Validate model
-        if self.model not in VALID_MODELS:
+        if self.model not in valid_models:
             raise ModelError(
-                f"Invalid model '{self.model}'. "
-                f"Valid models are: {', '.join(VALID_MODELS)}. "
+                f"Invalid model '{self.model}' for provider '{self.provider}'. "
+                f"Valid models are: {', '.join(valid_models)}. "
                 "Set MODEL in your .env file to use a different model."
             )
 
-        logger.info(f"AI Engine initialized with model: {self.model}")
-        self.client = AsyncOpenAI(api_key=self.api_key)
+        logger.info(f"AI Engine initialized with {self.provider} model: {self.model}")
+        
+        # Initialize the appropriate client
+        if self.provider == "gemini":
+            genai.configure(api_key=self.api_key)
+            self.gemini_model = genai.GenerativeModel(self.model)
+        else:
+            self.client = AsyncOpenAI(api_key=self.api_key)
 
     def _build_prompt(self, issue: GitHubIssue) -> str:
         """
@@ -186,6 +219,10 @@ Return ONLY valid JSON, no additional text."""
             title=issue.title, body=body, comments=comments
         )
 
+    def get_provider_name(self) -> str:
+        """Get the name of the AI provider being used"""
+        return self.provider
+
     async def analyze_issue(self, issue: GitHubIssue) -> AnalysisResult:
         """
         Analyze a GitHub issue using AI
@@ -205,6 +242,59 @@ Return ONLY valid JSON, no additional text."""
         prompt = self._build_prompt(issue)
         logger.debug(f"Analyzing issue: {issue.title[:50]}...")
 
+        if self.provider == "gemini":
+            return await self._analyze_with_gemini(prompt)
+        else:
+            return await self._analyze_with_openai(prompt)
+
+    async def _analyze_with_gemini(self, prompt: str) -> AnalysisResult:
+        """Analyze using Google Gemini"""
+        try:
+            full_prompt = f"{self.SYSTEM_PROMPT}\n\n{prompt}"
+            
+            # Use synchronous API in async context
+            import asyncio
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: self.gemini_model.generate_content(
+                    full_prompt,
+                    generation_config=genai.types.GenerationConfig(
+                        temperature=0.3,
+                        max_output_tokens=2000,
+                    )
+                )
+            )
+
+            content = response.text
+            result = clean_json_response(content)
+            logger.debug("Gemini analysis completed successfully")
+
+            return self._validate_result(result)
+
+        except Exception as e:
+            error_msg = str(e).lower()
+            logger.error(f"Gemini API error: {e}")
+            
+            if "quota" in error_msg or "rate" in error_msg:
+                raise RateLimitExceededError(
+                    "Gemini rate limit exceeded. Please wait a moment and try again. "
+                    "Tips: 1) Wait 20-60 seconds, 2) Check your quota at Google AI Studio."
+                )
+            elif "api key" in error_msg or "invalid" in error_msg:
+                raise APIKeyError(
+                    "Gemini API key is invalid or expired. "
+                    "Please check your GEMINI_API_KEY and ensure it's active. "
+                    "Get a new key at: https://aistudio.google.com/apikey"
+                )
+            else:
+                raise AIEngineError(
+                    f"Gemini API error: {str(e)}. "
+                    "Please check your configuration and try again."
+                )
+
+    async def _analyze_with_openai(self, prompt: str) -> AnalysisResult:
+        """Analyze using OpenAI"""
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,

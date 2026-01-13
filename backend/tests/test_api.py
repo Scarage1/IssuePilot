@@ -178,3 +178,153 @@ class TestRateLimitEndpoint:
         data = response.json()
         assert "limit" in data
         assert "remaining" in data
+
+
+class TestBatchAnalyzeEndpoint:
+    """Tests for batch analyze endpoint"""
+
+    def test_batch_analyze_invalid_repo_format(self):
+        """Test batch analyze with invalid repo format"""
+        response = client.post(
+            "/analyze/batch",
+            json={"repo": "invalid-format", "issue_numbers": [123]}
+        )
+        assert response.status_code == 422
+
+    def test_batch_analyze_empty_issue_numbers(self):
+        """Test batch analyze with empty issue numbers list"""
+        response = client.post(
+            "/analyze/batch",
+            json={"repo": "owner/repo", "issue_numbers": []}
+        )
+        assert response.status_code == 422
+
+    def test_batch_analyze_too_many_issues(self):
+        """Test batch analyze with more than 10 issues"""
+        response = client.post(
+            "/analyze/batch",
+            json={"repo": "owner/repo", "issue_numbers": list(range(1, 15))}
+        )
+        assert response.status_code == 422
+
+    @patch('app.main.GitHubClient')
+    @patch('app.main.AIEngine')
+    @patch('app.main.DuplicateFinder')
+    def test_batch_analyze_success(self, mock_duplicate, mock_ai, mock_github):
+        """Test successful batch analysis"""
+        # Create mock issues
+        def create_mock_issue(number):
+            return GitHubIssue(
+                number=number,
+                title=f"Test Issue {number}",
+                body=f"Test body {number}",
+                state="open",
+                labels=["bug"],
+                url=f"https://github.com/owner/repo/issues/{number}",
+                comments=[],
+                created_at="2024-01-01T00:00:00Z",
+                updated_at="2024-01-02T00:00:00Z"
+            )
+
+        mock_github_instance = MagicMock()
+        mock_github_instance.get_issue = AsyncMock(side_effect=lambda repo, num: create_mock_issue(num))
+        mock_github_instance.get_open_issues = AsyncMock(return_value=[])
+        mock_github.return_value = mock_github_instance
+
+        # Mock AI engine
+        mock_analysis = AnalysisResult(
+            summary="Test summary",
+            root_cause="Test root cause",
+            solution_steps=["Step 1"],
+            checklist=["Item 1"],
+            labels=["bug"],
+            similar_issues=[]
+        )
+        mock_ai_instance = MagicMock()
+        mock_ai_instance.analyze_issue = AsyncMock(return_value=mock_analysis)
+        mock_ai.return_value = mock_ai_instance
+
+        # Mock duplicate finder
+        mock_duplicate_instance = MagicMock()
+        mock_duplicate_instance.find_similar_issues = AsyncMock(return_value=[])
+        mock_duplicate.return_value = mock_duplicate_instance
+
+        response = client.post(
+            "/analyze/batch",
+            json={"repo": "owner/repo", "issue_numbers": [1, 2, 3]}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["repo"] == "owner/repo"
+        assert data["total"] == 3
+        assert data["successful"] == 3
+        assert data["failed"] == 0
+        assert len(data["results"]) == 3
+        for result in data["results"]:
+            assert result["success"] is True
+            assert result["result"] is not None
+
+    @patch('app.main.GitHubClient')
+    @patch('app.main.AIEngine')
+    @patch('app.main.DuplicateFinder')
+    def test_batch_analyze_partial_failure(self, mock_duplicate, mock_ai, mock_github):
+        """Test batch analysis with some issues failing"""
+        # Clear cache to ensure clean test
+        from app.main import analysis_cache
+        analysis_cache.clear()
+
+        # Mock GitHub client - issue 2 not found
+        def get_issue_side_effect(repo, number):
+            if number == 2:
+                raise Exception("404 Not Found")
+            return GitHubIssue(
+                number=number,
+                title=f"Test Issue {number}",
+                body=f"Test body {number}",
+                state="open",
+                labels=["bug"],
+                url=f"https://github.com/owner/repo/issues/{number}",
+                comments=[],
+                created_at="2024-01-01T00:00:00Z",
+                updated_at="2024-01-02T00:00:00Z"
+            )
+
+        mock_github_instance = MagicMock()
+        mock_github_instance.get_issue = AsyncMock(side_effect=get_issue_side_effect)
+        mock_github_instance.get_open_issues = AsyncMock(return_value=[])
+        mock_github.return_value = mock_github_instance
+
+        # Mock AI engine
+        mock_analysis = AnalysisResult(
+            summary="Test summary",
+            root_cause="Test root cause",
+            solution_steps=["Step 1"],
+            checklist=["Item 1"],
+            labels=["bug"],
+            similar_issues=[]
+        )
+        mock_ai_instance = MagicMock()
+        mock_ai_instance.analyze_issue = AsyncMock(return_value=mock_analysis)
+        mock_ai.return_value = mock_ai_instance
+
+        # Mock duplicate finder
+        mock_duplicate_instance = MagicMock()
+        mock_duplicate_instance.find_similar_issues = AsyncMock(return_value=[])
+        mock_duplicate.return_value = mock_duplicate_instance
+
+        response = client.post(
+            "/analyze/batch",
+            json={"repo": "owner/repo", "issue_numbers": [1, 2, 3]}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 3
+        assert data["successful"] == 2
+        assert data["failed"] == 1
+
+        # Check that issue 2 failed
+        issue_2_result = next(r for r in data["results"] if r["issue_number"] == 2)
+        assert issue_2_result["success"] is False
+        assert "not found" in issue_2_result["error"].lower()

@@ -163,6 +163,58 @@ pip install -e .
 # Now you can use: issuepilot --help
 ```
 
+### 🐳 Docker (Recommended for Production)
+
+The easiest way to run IssuePilot in production:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/Scarage1/IssuePilot.git
+cd IssuePilot
+
+# 2. Create environment file
+cp .env.example .env
+# Edit .env with your API keys
+
+# 3. Start all services
+docker-compose up -d
+
+# 4. Access the application
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:8000
+```
+
+**Docker Commands:**
+
+```bash
+# Start services
+docker-compose up -d
+
+# Stop services
+docker-compose down
+
+# View logs
+docker-compose logs -f
+
+# Rebuild after changes
+docker-compose up -d --build
+
+# Check service health
+docker-compose ps
+```
+
+**Environment Variables for Docker:**
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AI_PROVIDER` | AI provider to use (`openai` or `gemini`) | `openai` |
+| `OPENAI_API_KEY` | OpenAI API key (required if using OpenAI) | - |
+| `GEMINI_API_KEY` | Gemini API key (required if using Gemini) | - |
+| `MODEL` | AI model to use | `gpt-4o-mini` |
+| `GITHUB_TOKEN` | GitHub token for higher rate limits | - |
+| `CACHE_TTL` | Cache time-to-live in seconds | `3600` |
+| `MAX_CACHE_SIZE` | Maximum cached items | `1000` |
+
 ---
 
 ## 🔧 Usage

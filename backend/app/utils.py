@@ -206,3 +206,355 @@ def sanitize_input(text: str) -> str:
         text = text[:max_length]
 
     return text
+
+
+def generate_html_export(
+    analysis: AnalysisResult, repo: str = "", issue_number: int = 0
+) -> str:
+    """
+    Generate HTML export from analysis result
+
+    Args:
+        analysis: Analysis result to export
+        repo: Repository name (optional)
+        issue_number: Issue number (optional)
+
+    Returns:
+        Formatted HTML string
+    """
+    # Escape HTML entities
+    def escape_html(text: str) -> str:
+        return (
+            text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&#39;")
+        )
+
+    title = f"Issue Analysis Report"
+    if repo and issue_number:
+        title = f"Analysis: {repo} #{issue_number}"
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{escape_html(title)}</title>
+    <style>
+        :root {{
+            --primary: #2563eb;
+            --primary-light: #dbeafe;
+            --success: #22c55e;
+            --success-light: #dcfce7;
+            --warning: #eab308;
+            --warning-light: #fef9c3;
+            --purple: #9333ea;
+            --purple-light: #f3e8ff;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-600: #4b5563;
+            --gray-800: #1f2937;
+        }}
+        
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: var(--gray-800);
+            background: var(--gray-100);
+            padding: 2rem;
+        }}
+        
+        .container {{
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }}
+        
+        .header {{
+            background: linear-gradient(135deg, var(--primary), #1d4ed8);
+            color: white;
+            padding: 2rem;
+        }}
+        
+        .header h1 {{
+            font-size: 1.75rem;
+            margin-bottom: 0.5rem;
+        }}
+        
+        .header .meta {{
+            opacity: 0.9;
+            font-size: 0.875rem;
+        }}
+        
+        .content {{
+            padding: 2rem;
+        }}
+        
+        .section {{
+            margin-bottom: 2rem;
+        }}
+        
+        .section-header {{
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }}
+        
+        .section-header h2 {{
+            font-size: 1.25rem;
+            color: var(--gray-800);
+        }}
+        
+        .icon {{
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            font-size: 0.875rem;
+        }}
+        
+        .icon-blue {{ background: var(--primary-light); color: var(--primary); }}
+        .icon-yellow {{ background: var(--warning-light); color: var(--warning); }}
+        .icon-green {{ background: var(--success-light); color: var(--success); }}
+        .icon-purple {{ background: var(--purple-light); color: var(--purple); }}
+        
+        .card {{
+            background: var(--gray-100);
+            border-radius: 8px;
+            padding: 1rem;
+        }}
+        
+        .steps {{
+            counter-reset: step;
+        }}
+        
+        .step {{
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+        }}
+        
+        .step-number {{
+            width: 24px;
+            height: 24px;
+            background: var(--success);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }}
+        
+        .checklist-item {{
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }}
+        
+        .checkbox {{
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--gray-200);
+            border-radius: 4px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }}
+        
+        .labels {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }}
+        
+        .label {{
+            background: var(--primary-light);
+            color: var(--primary);
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }}
+        
+        .similar-issue {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+        }}
+        
+        .similar-issue a {{
+            color: var(--primary);
+            text-decoration: none;
+        }}
+        
+        .similar-issue a:hover {{
+            text-decoration: underline;
+        }}
+        
+        .similarity {{
+            background: var(--gray-100);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            color: var(--gray-600);
+        }}
+        
+        .footer {{
+            text-align: center;
+            padding: 1.5rem;
+            background: var(--gray-100);
+            color: var(--gray-600);
+            font-size: 0.875rem;
+        }}
+        
+        .footer a {{
+            color: var(--primary);
+            text-decoration: none;
+        }}
+        
+        @media print {{
+            body {{
+                background: white;
+                padding: 0;
+            }}
+            .container {{
+                box-shadow: none;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Issue Analysis Report</h1>
+"""
+
+    if repo and issue_number:
+        html += f"""            <div class="meta">
+                Repository: <strong>{escape_html(repo)}</strong> &bull; Issue: <strong>#{issue_number}</strong>
+            </div>
+"""
+
+    html += f"""        </div>
+        
+        <div class="content">
+            <div class="section">
+                <div class="section-header">
+                    <span class="icon icon-blue">📋</span>
+                    <h2>Summary</h2>
+                </div>
+                <div class="card">
+                    <p>{escape_html(analysis.summary)}</p>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-header">
+                    <span class="icon icon-yellow">🔬</span>
+                    <h2>Root Cause Analysis</h2>
+                </div>
+                <div class="card">
+                    <p>{escape_html(analysis.root_cause)}</p>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-header">
+                    <span class="icon icon-green">🛠️</span>
+                    <h2>Solution Steps</h2>
+                </div>
+                <div class="steps">
+"""
+
+    for i, step in enumerate(analysis.solution_steps, 1):
+        html += f"""                    <div class="step">
+                        <span class="step-number">{i}</span>
+                        <span>{escape_html(step)}</span>
+                    </div>
+"""
+
+    html += """                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-header">
+                    <span class="icon icon-purple">✅</span>
+                    <h2>Developer Checklist</h2>
+                </div>
+                <div class="card">
+"""
+
+    for item in analysis.checklist:
+        html += f"""                    <div class="checklist-item">
+                        <div class="checkbox"></div>
+                        <span>{escape_html(item)}</span>
+                    </div>
+"""
+
+    html += """                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-header">
+                    <span class="icon icon-blue">🏷️</span>
+                    <h2>Suggested Labels</h2>
+                </div>
+                <div class="labels">
+"""
+
+    for label in analysis.labels:
+        html += f"""                    <span class="label">{escape_html(label)}</span>
+"""
+
+    html += """                </div>
+            </div>
+"""
+
+    if analysis.similar_issues:
+        html += """            <div class="section">
+                <div class="section-header">
+                    <span class="icon icon-yellow">🔗</span>
+                    <h2>Similar Issues</h2>
+                </div>
+"""
+        for issue in analysis.similar_issues:
+            html += f"""                <div class="similar-issue">
+                    <a href="{escape_html(issue.url)}" target="_blank">{escape_html(issue.title)}</a>
+                    <span class="similarity">{issue.similarity:.0%} match</span>
+                </div>
+"""
+        html += """            </div>
+"""
+
+    html += """        </div>
+        
+        <div class="footer">
+            Generated by <a href="https://github.com/Scarage1/IssuePilot" target="_blank">IssuePilot</a> 🚀
+        </div>
+    </div>
+</body>
+</html>"""
+
+    return html
