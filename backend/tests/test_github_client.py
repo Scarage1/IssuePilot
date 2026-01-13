@@ -79,7 +79,7 @@ class TestGitHubClient:
             "updated_at": "2024-01-01T00:00:00Z"
         }
 
-        with patch("httpx.AsyncClient") as mock_client:
+        with patch('httpx.AsyncClient') as mock_client:
             mock_response = MagicMock()
             mock_response.json.return_value = mock_issue_data
             mock_response.raise_for_status = MagicMock()
