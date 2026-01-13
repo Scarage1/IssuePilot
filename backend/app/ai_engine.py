@@ -3,7 +3,6 @@ AI Engine for IssuePilot - Handles LLM interactions
 Supports OpenAI and Google Gemini
 """
 
-import json
 import logging
 import os
 from typing import Optional
@@ -145,10 +144,12 @@ Return ONLY valid JSON, no additional text."""
             ModelError: If model is invalid
         """
         self.provider = provider or os.getenv("AI_PROVIDER", "openai")
-        
+
         # Get appropriate API key based on provider
         if self.provider == "gemini":
-            self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+            self.api_key = (
+                api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+            )
             self.model = model or os.getenv("MODEL", "gemini-2.0-flash")
             valid_models = VALID_GEMINI_MODELS
             key_name = "GEMINI_API_KEY"
@@ -183,7 +184,7 @@ Return ONLY valid JSON, no additional text."""
             )
 
         logger.info(f"AI Engine initialized with {self.provider} model: {self.model}")
-        
+
         # Initialize the appropriate client
         if self.provider == "gemini":
             genai.configure(api_key=self.api_key)
@@ -251,9 +252,10 @@ Return ONLY valid JSON, no additional text."""
         """Analyze using Google Gemini"""
         try:
             full_prompt = f"{self.SYSTEM_PROMPT}\n\n{prompt}"
-            
+
             # Use synchronous API in async context
             import asyncio
+
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
                 None,
@@ -262,8 +264,8 @@ Return ONLY valid JSON, no additional text."""
                     generation_config=genai.types.GenerationConfig(
                         temperature=0.3,
                         max_output_tokens=2000,
-                    )
-                )
+                    ),
+                ),
             )
 
             content = response.text
@@ -275,7 +277,7 @@ Return ONLY valid JSON, no additional text."""
         except Exception as e:
             error_msg = str(e).lower()
             logger.error(f"Gemini API error: {e}")
-            
+
             if "quota" in error_msg or "rate" in error_msg:
                 raise RateLimitExceededError(
                     "Gemini rate limit exceeded. Please wait a moment and try again. "

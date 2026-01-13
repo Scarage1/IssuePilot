@@ -7,21 +7,19 @@ Database is optional - the app works without it.
 
 import os
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
-    create_engine,
+    JSON,
     Column,
+    DateTime,
+    Float,
+    ForeignKey,
     Integer,
     String,
     Text,
-    DateTime,
-    Float,
-    Boolean,
-    ForeignKey,
-    JSON,
+    create_engine,
 )
-from sqlalchemy.orm import sessionmaker, relationship, declarative_base
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # Check if database is enabled
@@ -40,19 +38,19 @@ class AnalysisRecord(Base):
     repo = Column(String(255), nullable=False, index=True)
     issue_number = Column(Integer, nullable=False, index=True)
     issue_title = Column(String(500), nullable=True)
-    
+
     # Analysis results
     summary = Column(Text, nullable=False)
     root_cause = Column(Text, nullable=False)
     solution_steps = Column(JSON, nullable=False)  # List[str]
     checklist = Column(JSON, nullable=False)  # List[str]
     labels = Column(JSON, nullable=False)  # List[str]
-    
+
     # Metadata
     ai_provider = Column(String(50), nullable=True)  # "openai" or "gemini"
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     similar_issues = relationship(
         "SimilarIssueRecord",
@@ -100,7 +98,7 @@ def get_engine():
             )
         else:
             _engine = create_engine(DATABASE_URL)
-        
+
         # Create tables if they don't exist
         Base.metadata.create_all(bind=_engine)
     return _engine

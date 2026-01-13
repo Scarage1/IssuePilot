@@ -222,6 +222,7 @@ def generate_html_export(
     Returns:
         Formatted HTML string
     """
+
     # Escape HTML entities
     def escape_html(text: str) -> str:
         return (
@@ -232,7 +233,7 @@ def generate_html_export(
             .replace("'", "&#39;")
         )
 
-    title = f"Issue Analysis Report"
+    title = "Issue Analysis Report"
     if repo and issue_number:
         title = f"Analysis: {repo} #{issue_number}"
 
@@ -257,13 +258,13 @@ def generate_html_export(
             --gray-600: #4b5563;
             --gray-800: #1f2937;
         }}
-        
+
         * {{
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }}
-        
+
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
             line-height: 1.6;
@@ -271,7 +272,7 @@ def generate_html_export(
             background: var(--gray-100);
             padding: 2rem;
         }}
-        
+
         .container {{
             max-width: 800px;
             margin: 0 auto;
@@ -280,43 +281,43 @@ def generate_html_export(
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             overflow: hidden;
         }}
-        
+
         .header {{
             background: linear-gradient(135deg, var(--primary), #1d4ed8);
             color: white;
             padding: 2rem;
         }}
-        
+
         .header h1 {{
             font-size: 1.75rem;
             margin-bottom: 0.5rem;
         }}
-        
+
         .header .meta {{
             opacity: 0.9;
             font-size: 0.875rem;
         }}
-        
+
         .content {{
             padding: 2rem;
         }}
-        
+
         .section {{
             margin-bottom: 2rem;
         }}
-        
+
         .section-header {{
             display: flex;
             align-items: center;
             gap: 0.5rem;
             margin-bottom: 1rem;
         }}
-        
+
         .section-header h2 {{
             font-size: 1.25rem;
             color: var(--gray-800);
         }}
-        
+
         .icon {{
             width: 24px;
             height: 24px;
@@ -326,28 +327,28 @@ def generate_html_export(
             border-radius: 6px;
             font-size: 0.875rem;
         }}
-        
+
         .icon-blue {{ background: var(--primary-light); color: var(--primary); }}
         .icon-yellow {{ background: var(--warning-light); color: var(--warning); }}
         .icon-green {{ background: var(--success-light); color: var(--success); }}
         .icon-purple {{ background: var(--purple-light); color: var(--purple); }}
-        
+
         .card {{
             background: var(--gray-100);
             border-radius: 8px;
             padding: 1rem;
         }}
-        
+
         .steps {{
             counter-reset: step;
         }}
-        
+
         .step {{
             display: flex;
             gap: 1rem;
             margin-bottom: 0.75rem;
         }}
-        
+
         .step-number {{
             width: 24px;
             height: 24px;
@@ -361,14 +362,14 @@ def generate_html_export(
             font-weight: 600;
             flex-shrink: 0;
         }}
-        
+
         .checklist-item {{
             display: flex;
             align-items: flex-start;
             gap: 0.75rem;
             margin-bottom: 0.5rem;
         }}
-        
+
         .checkbox {{
             width: 18px;
             height: 18px;
@@ -377,13 +378,13 @@ def generate_html_export(
             flex-shrink: 0;
             margin-top: 2px;
         }}
-        
+
         .labels {{
             display: flex;
             flex-wrap: wrap;
             gap: 0.5rem;
         }}
-        
+
         .label {{
             background: var(--primary-light);
             color: var(--primary);
@@ -392,7 +393,7 @@ def generate_html_export(
             font-size: 0.875rem;
             font-weight: 500;
         }}
-        
+
         .similar-issue {{
             display: flex;
             justify-content: space-between;
@@ -403,16 +404,16 @@ def generate_html_export(
             border-radius: 8px;
             margin-bottom: 0.5rem;
         }}
-        
+
         .similar-issue a {{
             color: var(--primary);
             text-decoration: none;
         }}
-        
+
         .similar-issue a:hover {{
             text-decoration: underline;
         }}
-        
+
         .similarity {{
             background: var(--gray-100);
             padding: 0.25rem 0.5rem;
@@ -420,7 +421,7 @@ def generate_html_export(
             font-size: 0.75rem;
             color: var(--gray-600);
         }}
-        
+
         .footer {{
             text-align: center;
             padding: 1.5rem;
@@ -428,12 +429,12 @@ def generate_html_export(
             color: var(--gray-600);
             font-size: 0.875rem;
         }}
-        
+
         .footer a {{
             color: var(--primary);
             text-decoration: none;
         }}
-        
+
         @media print {{
             body {{
                 background: white;
@@ -458,7 +459,7 @@ def generate_html_export(
 """
 
     html += f"""        </div>
-        
+
         <div class="content">
             <div class="section">
                 <div class="section-header">
@@ -469,7 +470,7 @@ def generate_html_export(
                     <p>{escape_html(analysis.summary)}</p>
                 </div>
             </div>
-            
+
             <div class="section">
                 <div class="section-header">
                     <span class="icon icon-yellow">🔬</span>
@@ -479,7 +480,7 @@ def generate_html_export(
                     <p>{escape_html(analysis.root_cause)}</p>
                 </div>
             </div>
-            
+
             <div class="section">
                 <div class="section-header">
                     <span class="icon icon-green">🛠️</span>
@@ -497,7 +498,7 @@ def generate_html_export(
 
     html += """                </div>
             </div>
-            
+
             <div class="section">
                 <div class="section-header">
                     <span class="icon icon-purple">✅</span>
@@ -515,7 +516,7 @@ def generate_html_export(
 
     html += """                </div>
             </div>
-            
+
             <div class="section">
                 <div class="section-header">
                     <span class="icon icon-blue">🏷️</span>
@@ -549,7 +550,7 @@ def generate_html_export(
 """
 
     html += """        </div>
-        
+
         <div class="footer">
             Generated by <a href="https://github.com/Scarage1/IssuePilot" target="_blank">IssuePilot</a> 🚀
         </div>

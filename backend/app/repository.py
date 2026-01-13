@@ -8,13 +8,12 @@ from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import desc
-from sqlalchemy.orm import Session
 
 from .database import (
-    get_session,
-    is_database_enabled,
     AnalysisRecord,
     SimilarIssueRecord,
+    get_session,
+    is_database_enabled,
 )
 from .schemas import AnalysisResult, SimilarIssue
 
@@ -37,7 +36,7 @@ class AnalysisRepository:
     ) -> Optional[int]:
         """
         Save an analysis result to the database.
-        
+
         Returns the record ID if successful, None if database is disabled.
         """
         if not is_database_enabled():
@@ -70,7 +69,7 @@ class AnalysisRepository:
                 session.query(SimilarIssueRecord).filter_by(
                     analysis_id=existing.id
                 ).delete()
-                
+
                 for similar in result.similar_issues:
                     session.add(
                         SimilarIssueRecord(
@@ -125,7 +124,7 @@ class AnalysisRepository:
     def get_analysis(repo: str, issue_number: int) -> Optional[dict]:
         """
         Get a saved analysis by repo and issue number.
-        
+
         Returns the analysis as a dict or None if not found.
         """
         if not is_database_enabled():
@@ -182,7 +181,7 @@ class AnalysisRepository:
     ) -> List[dict]:
         """
         Get analysis history, optionally filtered by repo.
-        
+
         Returns a list of analysis summaries.
         """
         if not is_database_enabled():
@@ -211,7 +210,9 @@ class AnalysisRepository:
                     "repo": r.repo,
                     "issue_number": r.issue_number,
                     "issue_title": r.issue_title,
-                    "summary": r.summary[:200] + "..." if len(r.summary) > 200 else r.summary,
+                    "summary": (
+                        r.summary[:200] + "..." if len(r.summary) > 200 else r.summary
+                    ),
                     "labels": r.labels,
                     "ai_provider": r.ai_provider,
                     "created_at": r.created_at.isoformat(),
@@ -226,7 +227,7 @@ class AnalysisRepository:
     def delete_analysis(repo: str, issue_number: int) -> bool:
         """
         Delete an analysis record.
-        
+
         Returns True if deleted, False if not found or database disabled.
         """
         if not is_database_enabled():
@@ -268,9 +269,7 @@ class AnalysisRepository:
 
         try:
             total_analyses = session.query(AnalysisRecord).count()
-            unique_repos = (
-                session.query(AnalysisRecord.repo).distinct().count()
-            )
+            unique_repos = session.query(AnalysisRecord.repo).distinct().count()
 
             return {
                 "enabled": True,

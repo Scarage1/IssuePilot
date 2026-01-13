@@ -53,7 +53,7 @@ class BatchAnalyzeRequest(BaseModel):
         ...,
         min_length=1,
         max_length=10,
-        description="List of issue numbers to analyze (max 10)"
+        description="List of issue numbers to analyze (max 10)",
     )
     github_token: Optional[str] = Field(
         None, description="Optional GitHub token for higher rate limits"

@@ -4,13 +4,11 @@ Tests for database and repository functionality
 
 import os
 import pytest
-from unittest.mock import patch
 
 # Set test database URL before importing modules
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from app.database import (
-    Base,
     AnalysisRecord,
     SimilarIssueRecord,
     get_engine,
@@ -27,15 +25,16 @@ def setup_database():
     """Reset database before each test"""
     # Reset the database module's cached state
     import app.database as db_module
+
     db_module._engine = None
     db_module._SessionLocal = None
     db_module.DATABASE_URL = "sqlite:///:memory:"
     db_module.DATABASE_ENABLED = True
-    
+
     # Initialize database
     init_database()
     yield
-    
+
     # Clean up
     session = get_session()
     if session:
@@ -116,7 +115,7 @@ class TestAnalysisRepository:
             ],
         )
 
-        record_id = AnalysisRepository.save_analysis(
+        AnalysisRepository.save_analysis(
             repo="test/repo",
             issue_number=2,
             result=result,
@@ -339,21 +338,23 @@ class TestDatabaseDisabled:
     def test_repository_not_available_when_disabled(self):
         """Test that repository reports not available when DB disabled"""
         import app.database as db_module
+
         original_enabled = db_module.DATABASE_ENABLED
-        
+
         db_module.DATABASE_ENABLED = False
-        
+
         assert AnalysisRepository.is_available() is False
-        
+
         db_module.DATABASE_ENABLED = original_enabled
 
     def test_save_returns_none_when_disabled(self):
         """Test that save returns None when DB is disabled"""
         import app.database as db_module
+
         original_enabled = db_module.DATABASE_ENABLED
-        
+
         db_module.DATABASE_ENABLED = False
-        
+
         result = AnalysisResult(
             summary="Test",
             root_cause="Test",
@@ -362,26 +363,27 @@ class TestDatabaseDisabled:
             labels=["bug"],
             similar_issues=[],
         )
-        
+
         record_id = AnalysisRepository.save_analysis(
             repo="test/repo",
             issue_number=1,
             result=result,
         )
-        
+
         assert record_id is None
-        
+
         db_module.DATABASE_ENABLED = original_enabled
 
     def test_get_history_returns_empty_when_disabled(self):
         """Test that get_history returns empty list when DB is disabled"""
         import app.database as db_module
+
         original_enabled = db_module.DATABASE_ENABLED
-        
+
         db_module.DATABASE_ENABLED = False
-        
+
         history = AnalysisRepository.get_history()
-        
+
         assert history == []
-        
+
         db_module.DATABASE_ENABLED = original_enabled

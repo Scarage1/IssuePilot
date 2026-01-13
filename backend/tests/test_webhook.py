@@ -4,9 +4,8 @@ Tests for GitHub webhook functionality
 
 import hashlib
 import hmac
-import json
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -30,14 +29,10 @@ class TestWebhookSignatureVerification:
         """Test that valid signatures are accepted"""
         secret = "test-secret"
         payload = b'{"test": "data"}'
-        
+
         # Calculate expected signature
-        expected = hmac.new(
-            secret.encode("utf-8"),
-            payload,
-            hashlib.sha256
-        ).hexdigest()
-        
+        expected = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+
         with patch("app.webhook.WEBHOOK_SECRET", secret):
             result = verify_webhook_signature(payload, f"sha256={expected}")
             assert result is True
@@ -253,9 +248,9 @@ class TestWebhookPayloadParsing:
                 "type": "User",
             },
         }
-        
+
         payload = IssueWebhookPayload(**payload_dict)
-        
+
         assert payload.action == "opened"
         assert payload.issue.number == 42
         assert payload.issue.title == "Test Issue Title"
@@ -280,7 +275,7 @@ class TestWebhookPayloadParsing:
                 "login": "user",
             },
         }
-        
+
         payload = IssueWebhookPayload(**payload_dict)
         assert payload.issue.body == ""
         assert payload.issue.labels == []
@@ -303,9 +298,9 @@ class TestFormatWebhookLog:
             repository=WebhookRepository(full_name="test/repo"),
             sender=WebhookSender(login="testuser"),
         )
-        
+
         log_msg = format_webhook_log(payload)
-        
+
         assert "[opened]" in log_msg
         assert "test/repo#123" in log_msg
         assert "@testuser" in log_msg
@@ -319,6 +314,7 @@ class TestWebhookEndpoint:
     def client(self):
         """Create test client"""
         from app.main import app
+
         return TestClient(app)
 
     def test_webhook_without_secret_returns_skipped(self, client):
@@ -326,13 +322,13 @@ class TestWebhookEndpoint:
         with patch("app.webhook.WEBHOOK_SECRET", ""):
             with patch("app.main.get_webhook_config") as mock_config:
                 mock_config.return_value = WebhookConfig(enabled=False)
-                
+
                 response = client.post(
                     "/webhook/github",
                     json={"action": "opened"},
                     headers={"X-GitHub-Event": "issues"},
                 )
-                
+
                 assert response.status_code == 200
                 data = response.json()
                 assert data["status"] == "skipped"
@@ -341,7 +337,7 @@ class TestWebhookEndpoint:
     def test_webhook_config_endpoint(self, client):
         """Test webhook config endpoint returns configuration"""
         response = client.get("/webhook/config")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert "enabled" in data
@@ -361,7 +357,7 @@ class TestWebhookEndpoint:
                             "X-Hub-Signature-256": "sha256=test",
                         },
                     )
-                    
+
                     assert response.status_code == 200
                     data = response.json()
                     assert data["status"] == "ignored"
