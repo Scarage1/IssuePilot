@@ -55,7 +55,7 @@ class ExportResponse(BaseModel):
 
 class DependencyStatus(BaseModel):
     """Schema for dependency health status"""
-    
+
     openai_api_configured: bool = Field(
         ..., description="Whether OpenAI API key is configured"
     )

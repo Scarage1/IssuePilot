@@ -3,17 +3,15 @@ IssuePilot - AI-Powered GitHub Issue Assistant
 Main FastAPI Application
 """
 
+import logging
 import os
 import time
-import logging
 from contextlib import asynccontextmanager
-from functools import lru_cache
-from typing import Optional
 
+from cachetools import TTLCache
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from cachetools import TTLCache
 
 from .ai_engine import AIEngine
 from .duplicate_finder import DuplicateFinder
@@ -21,11 +19,11 @@ from .github_client import GitHubClient
 from .schemas import (
     AnalysisResult,
     AnalyzeRequest,
+    DependencyStatus,
     ErrorResponse,
     ExportRequest,
     ExportResponse,
     HealthResponse,
-    DependencyStatus,
 )
 from .utils import generate_markdown_export
 
@@ -37,7 +35,7 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger("issuepilot")
 
@@ -84,20 +82,22 @@ app.add_middleware(
 async def log_requests(request: Request, call_next):
     """Middleware to log all requests and responses"""
     start_time = time.time()
-    
+
     # Log incoming request (exclude sensitive headers)
     logger.info(f"📥 {request.method} {request.url.path}")
-    
+
     # Process request
     response = await call_next(request)
-    
+
     # Calculate duration
     duration = time.time() - start_time
-    
+
     # Log response
     status_emoji = "✅" if response.status_code < 400 else "❌"
-    logger.info(f"{status_emoji} {request.method} {request.url.path} - {response.status_code} ({duration:.3f}s)")
-    
+    logger.info(
+        f"{status_emoji} {request.method} {request.url.path} - {response.status_code} ({duration:.3f}s)"
+    )
+
     return response
 
 
@@ -117,7 +117,7 @@ async def health_check():
     """
     # Check OpenAI API key configuration
     openai_configured = bool(os.getenv("OPENAI_API_KEY"))
-    
+
     # Check GitHub API accessibility (optional, lightweight check)
     github_accessible = True
     try:
@@ -127,18 +127,17 @@ async def health_check():
     except Exception as e:
         logger.warning(f"GitHub API check failed: {e}")
         github_accessible = False
-    
+
     dependencies = DependencyStatus(
-        openai_api_configured=openai_configured,
-        github_api_accessible=github_accessible
+        openai_api_configured=openai_configured, github_api_accessible=github_accessible
     )
-    
+
     return HealthResponse(
         status="ok",
         version="1.1.0",
         dependencies=dependencies,
         cache_size=len(analysis_cache),
-        cache_ttl=CACHE_TTL
+        cache_ttl=CACHE_TTL,
     )
 
 
@@ -192,14 +191,16 @@ async def analyze_issue(request: AnalyzeRequest, http_request: Request):
     """
     cache_key = get_cache_key(request.repo, request.issue_number)
     no_cache = http_request.headers.get("X-No-Cache", "").lower() == "true"
-    
+
     # Check cache first (unless bypassed)
     if not no_cache and cache_key in analysis_cache:
         logger.info(f"📦 Cache hit for {cache_key}")
         return analysis_cache[cache_key]
-    
-    logger.info(f"🔍 Analyzing {request.repo}#{request.issue_number} (cache={'bypass' if no_cache else 'miss'})")
-    
+
+    logger.info(
+        f"🔍 Analyzing {request.repo}#{request.issue_number} (cache={'bypass' if no_cache else 'miss'})"
+    )
+
     try:
         # Initialize clients
         github_client = GitHubClient(token=request.github_token)
@@ -212,7 +213,9 @@ async def analyze_issue(request: AnalyzeRequest, http_request: Request):
             logger.debug(f"Fetched issue: {issue.title}")
         except Exception as e:
             if "404" in str(e):
-                logger.warning(f"Issue not found: {request.repo}#{request.issue_number}")
+                logger.warning(
+                    f"Issue not found: {request.repo}#{request.issue_number}"
+                )
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Issue #{request.issue_number} not found in {request.repo}",
@@ -251,7 +254,7 @@ async def analyze_issue(request: AnalyzeRequest, http_request: Request):
         # Store in cache
         analysis_cache[cache_key] = analysis
         logger.info(f"💾 Cached result for {cache_key}")
-        
+
         return analysis
 
     except HTTPException:
@@ -298,7 +301,7 @@ async def clear_cache():
     count = len(analysis_cache)
     analysis_cache.clear()
     logger.info(f"🗑️ Cache cleared ({count} entries)")
-    return {"message": f"Cache cleared successfully", "entries_cleared": count}
+    return {"message": "Cache cleared successfully", "entries_cleared": count}
 
 
 @app.get("/cache/stats", tags=["Utilities"])
@@ -313,7 +316,7 @@ async def cache_stats():
         "size": len(analysis_cache),
         "max_size": CACHE_MAX_SIZE,
         "ttl_seconds": CACHE_TTL,
-        "keys": list(analysis_cache.keys())
+        "keys": list(analysis_cache.keys()),
     }
 
 

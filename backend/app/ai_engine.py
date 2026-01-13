@@ -6,7 +6,13 @@ import logging
 import os
 from typing import Optional
 
-from openai import AsyncOpenAI, APIError, RateLimitError, AuthenticationError, BadRequestError
+from openai import (
+    APIError,
+    AsyncOpenAI,
+    AuthenticationError,
+    BadRequestError,
+    RateLimitError,
+)
 
 from .schemas import AnalysisResult, GitHubIssue
 from .utils import clean_json_response, truncate_text
@@ -26,26 +32,31 @@ VALID_MODELS = [
 
 class AIEngineError(Exception):
     """Base exception for AI Engine errors"""
+
     pass
 
 
 class APIKeyError(AIEngineError):
     """Raised when API key is missing or invalid"""
+
     pass
 
 
 class RateLimitExceededError(AIEngineError):
     """Raised when rate limit is exceeded"""
+
     pass
 
 
 class ModelError(AIEngineError):
     """Raised when model is invalid or unavailable"""
+
     pass
 
 
 class ContextLengthError(AIEngineError):
     """Raised when context length is exceeded"""
+
     pass
 
 
@@ -113,7 +124,7 @@ Return ONLY valid JSON, no additional text."""
             api_key: API key for AI provider
             model: Model to use for analysis
             provider: AI provider (currently supports 'openai')
-            
+
         Raises:
             APIKeyError: If API key is not configured
             ModelError: If model is invalid
@@ -129,13 +140,13 @@ Return ONLY valid JSON, no additional text."""
                 "Set OPENAI_API_KEY in your .env file or environment variables. "
                 "Get your API key at: https://platform.openai.com/api-keys"
             )
-        
+
         if len(self.api_key) < 20:
             raise APIKeyError(
                 "OpenAI API key appears to be invalid (too short). "
                 "Please check your OPENAI_API_KEY configuration."
             )
-        
+
         # Validate model
         if self.model not in VALID_MODELS:
             raise ModelError(
@@ -143,7 +154,7 @@ Return ONLY valid JSON, no additional text."""
                 f"Valid models are: {', '.join(VALID_MODELS)}. "
                 "Set MODEL in your .env file to use a different model."
             )
-        
+
         logger.info(f"AI Engine initialized with model: {self.model}")
         self.client = AsyncOpenAI(api_key=self.api_key)
 
@@ -184,7 +195,7 @@ Return ONLY valid JSON, no additional text."""
 
         Returns:
             AnalysisResult with structured analysis
-            
+
         Raises:
             APIKeyError: If API key is invalid
             RateLimitExceededError: If rate limit is exceeded
@@ -205,14 +216,14 @@ Return ONLY valid JSON, no additional text."""
                 max_tokens=2000,
                 response_format={"type": "json_object"},
             )
-            
+
             content = response.choices[0].message.content
             result = clean_json_response(content)
             logger.debug("AI analysis completed successfully")
-            
+
             # Validate and build result
             return self._validate_result(result)
-            
+
         except AuthenticationError as e:
             logger.error(f"OpenAI authentication error: {e}")
             raise APIKeyError(

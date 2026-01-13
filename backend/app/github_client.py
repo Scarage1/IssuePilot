@@ -21,16 +21,19 @@ DEFAULT_BASE_DELAY = float(os.getenv("GITHUB_RETRY_DELAY", "1.0"))
 
 class GitHubAPIError(Exception):
     """Base exception for GitHub API errors"""
+
     pass
 
 
 class GitHubRateLimitError(GitHubAPIError):
     """Raised when GitHub rate limit is exceeded"""
+
     pass
 
 
 class GitHubNotFoundError(GitHubAPIError):
     """Raised when resource is not found"""
+
     pass
 
 
@@ -43,7 +46,7 @@ class GitHubClient:
         self,
         token: Optional[str] = None,
         max_retries: int = DEFAULT_MAX_RETRIES,
-        base_delay: float = DEFAULT_BASE_DELAY
+        base_delay: float = DEFAULT_BASE_DELAY,
     ):
         """
         Initialize GitHub client
@@ -64,47 +67,46 @@ class GitHubClient:
             self.headers["Authorization"] = f"token {self.token}"
             logger.debug("GitHub client initialized with token")
         else:
-            logger.debug("GitHub client initialized without token (rate limits may apply)")
+            logger.debug(
+                "GitHub client initialized without token (rate limits may apply)"
+            )
 
     async def _request_with_retry(
-        self,
-        method: str,
-        url: str,
-        **kwargs
+        self, method: str, url: str, **kwargs
     ) -> httpx.Response:
         """
         Make HTTP request with exponential backoff retry for rate limits.
-        
+
         Args:
             method: HTTP method (GET, POST, etc.)
             url: Request URL
             **kwargs: Additional arguments for httpx
-            
+
         Returns:
             httpx.Response
-            
+
         Raises:
             GitHubRateLimitError: If rate limit exceeded after all retries
             GitHubNotFoundError: If resource not found
             GitHubAPIError: For other API errors
         """
         last_exception = None
-        
+
         for attempt in range(self.max_retries + 1):
             try:
                 async with httpx.AsyncClient() as client:
                     response = await client.request(
                         method, url, headers=self.headers, **kwargs
                     )
-                    
+
                     # Check for rate limit
                     if response.status_code == 403:
                         remaining = response.headers.get("X-RateLimit-Remaining", "0")
                         if remaining == "0":
                             reset_time = response.headers.get("X-RateLimit-Reset", "")
-                            
+
                             if attempt < self.max_retries:
-                                delay = self.base_delay * (2 ** attempt)
+                                delay = self.base_delay * (2**attempt)
                                 logger.warning(
                                     f"GitHub rate limit hit. Retry {attempt + 1}/{self.max_retries} "
                                     f"in {delay:.1f}s (reset: {reset_time})"
@@ -117,15 +119,15 @@ class GitHubClient:
                                     f"Rate limit resets at timestamp: {reset_time}. "
                                     "Consider using a GitHub token for higher limits."
                                 )
-                    
+
                     # Check for 404
                     if response.status_code == 404:
                         raise GitHubNotFoundError(f"Resource not found: {url}")
-                    
+
                     # Raise for other errors
                     response.raise_for_status()
                     return response
-                    
+
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 404:
                     raise GitHubNotFoundError(f"Resource not found: {url}")
@@ -135,10 +137,12 @@ class GitHubClient:
             except Exception as e:
                 last_exception = GitHubAPIError(f"Request failed: {str(e)}")
                 if attempt < self.max_retries:
-                    delay = self.base_delay * (2 ** attempt)
-                    logger.warning(f"Request error, retry {attempt + 1}/{self.max_retries} in {delay:.1f}s: {e}")
+                    delay = self.base_delay * (2**attempt)
+                    logger.warning(
+                        f"Request error, retry {attempt + 1}/{self.max_retries} in {delay:.1f}s: {e}"
+                    )
                     await asyncio.sleep(delay)
-        
+
         raise last_exception or GitHubAPIError("Request failed after all retries")
 
     async def get_issue(self, repo: str, issue_number: int) -> GitHubIssue:
@@ -154,15 +158,15 @@ class GitHubClient:
         """
         owner, repo_name = parse_repo(repo)
         url = f"{self.BASE_URL}/repos/{owner}/{repo_name}/issues/{issue_number}"
-        
+
         logger.debug(f"Fetching issue: {repo}#{issue_number}")
-        
+
         response = await self._request_with_retry("GET", url)
         data = response.json()
 
         # Fetch comments
         comments = await self.get_issue_comments(repo, issue_number)
-        
+
         logger.debug(f"Issue fetched: {data['title'][:50]}...")
 
         return GitHubIssue(
@@ -200,7 +204,7 @@ class GitHubClient:
             "GET", url, params={"per_page": max_comments}
         )
         data = response.json()
-        
+
         logger.debug(f"Fetched {len(data)} comments for {repo}#{issue_number}")
 
         return [sanitize_input(comment["body"]) for comment in data]
@@ -227,9 +231,7 @@ class GitHubClient:
 
         while len(all_issues) < max_issues:
             response = await self._request_with_retry(
-                "GET",
-                url,
-                params={"state": "open", "per_page": per_page, "page": page}
+                "GET", url, params={"state": "open", "per_page": per_page, "page": page}
             )
             data = response.json()
 
@@ -253,7 +255,7 @@ class GitHubClient:
 
             if len(data) < per_page:
                 break
-        
+
         logger.debug(f"Fetched {len(all_issues[:max_issues])} open issues from {repo}")
 
         return all_issues[:max_issues]
@@ -304,7 +306,7 @@ class GitHubClient:
             "remaining": data["rate"]["remaining"],
             "reset_at": data["rate"]["reset"],
         }
-        
+
         logger.debug(f"Rate limit: {rate_info['remaining']}/{rate_info['limit']}")
-        
+
         return rate_info
