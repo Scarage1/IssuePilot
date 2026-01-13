@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Rocket,
@@ -10,14 +10,6 @@ import {
   Link2,
   Zap,
   AlertCircle,
-  Sparkles,
-  ArrowRight,
-  Github,
-  Star,
-  GitFork,
-  TrendingUp,
-  Shield,
-  Clock,
 } from 'lucide-react';
 import { IssueInput } from '@/components/analysis/issue-input';
 import { AnalysisResultDisplay } from '@/components/analysis/analysis-result';
@@ -26,76 +18,29 @@ import { useAnalyze, useExportMarkdown } from '@/hooks/use-analyze';
 import { downloadFile } from '@/lib/utils';
 import type { AnalysisResult } from '@/types/api';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 
 const features = [
   {
     icon: FileText,
-    title: 'Smart Summaries',
-    description: 'Understand issues in seconds with AI-generated summaries',
-    color: 'text-blue-500',
-    bgColor: 'bg-blue-500/10',
+    title: 'Issue Summary',
+    description: 'Get a clear, concise summary of the issue',
   },
   {
     icon: Microscope,
-    title: 'Root Cause',
-    description: 'AI identifies likely causes of issues',
-    color: 'text-yellow-500',
-    bgColor: 'bg-yellow-500/10',
+    title: 'Root Cause Analysis',
+    description: 'Understand the likely cause of the problem',
   },
   {
     icon: ListOrdered,
-    title: 'Solution Plans',
-    description: 'Step-by-step guidance for fixing issues',
-    color: 'text-green-500',
-    bgColor: 'bg-green-500/10',
+    title: 'Implementation Steps',
+    description: 'Actionable steps to resolve the issue',
   },
   {
     icon: Link2,
-    title: 'Duplicates',
-    description: 'Find similar issues automatically',
-    color: 'text-purple-500',
-    bgColor: 'bg-purple-500/10',
+    title: 'Duplicate Detection',
+    description: 'Find related issues in the repository',
   },
 ];
-
-const stats = [
-  { label: 'Issues Analyzed', value: '10K+', icon: TrendingUp },
-  { label: 'Time Saved', value: '500h+', icon: Clock },
-  { label: 'Accuracy Rate', value: '95%', icon: Shield },
-];
-
-const quickExamples = [
-  { repo: 'facebook/react', issue: 28813, label: 'React' },
-  { repo: 'vercel/next.js', issue: 59825, label: 'Next.js' },
-  { repo: 'microsoft/vscode', issue: 199283, label: 'VS Code' },
-];
-
-function AnimatedCounter({ value, duration = 2000 }: { value: string; duration?: number }) {
-  const [displayValue, setDisplayValue] = useState('0');
-  
-  useEffect(() => {
-    const numericPart = parseInt(value.replace(/\D/g, ''));
-    const suffix = value.replace(/\d/g, '');
-    let start = 0;
-    const increment = numericPart / (duration / 50);
-    
-    const timer = setInterval(() => {
-      start += increment;
-      if (start >= numericPart) {
-        setDisplayValue(value);
-        clearInterval(timer);
-      } else {
-        setDisplayValue(Math.floor(start) + suffix);
-      }
-    }, 50);
-    
-    return () => clearInterval(timer);
-  }, [value, duration]);
-  
-  return <span>{displayValue}</span>;
-}
 
 export default function HomePage() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -158,83 +103,43 @@ export default function HomePage() {
     <div className="min-h-screen">
       {/* Hero Section - Only show when no result */}
       {!result && !analyzeMutation.isPending && (
-        <>
-          {/* Gradient Background */}
-          <div className="absolute inset-0 hero-gradient pointer-events-none" />
-          
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="container py-12 relative"
-          >
-            {/* Hero Content */}
-            <div className="text-center mb-12">
-              <motion.div 
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 200, delay: 0.1 }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6"
-              >
-                <Sparkles className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium">Powered by GPT-4 & Gemini</span>
-              </motion.div>
-              
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="flex justify-center mb-6"
-              >
-                <div className="relative">
-                  <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full animate-pulse-glow" />
-                  <div className="relative p-4 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20">
-                    <Rocket className="h-12 w-12 text-primary animate-float" />
-                  </div>
-                </div>
-              </motion.div>
-              
-              <motion.h1 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="text-5xl md:text-6xl font-bold tracking-tight mb-4 bg-gradient-to-r from-foreground via-foreground to-foreground/70 bg-clip-text"
-              >
-                IssuePilot
-              </motion.h1>
-              
-              <motion.p 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8"
-              >
-                AI-powered GitHub issue analysis for{' '}
-                <span className="text-foreground font-medium">open-source maintainers</span> and{' '}
-                <span className="text-foreground font-medium">contributors</span>
-              </motion.p>
-
-              {/* Stats */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="flex justify-center gap-8 md:gap-16 mb-12"
-              >
-                {stats.map(({ label, value, icon: Icon }, index) => (
-                  <div key={label} className="text-center">
-                    <div className="flex items-center justify-center gap-2 mb-1">
-                      <Icon className="h-4 w-4 text-primary" />
-                      <span className="text-2xl md:text-3xl font-bold">
-                        <AnimatedCounter value={value} duration={2000 + index * 500} />
-                      </span>
-                    </div>
-                    <span className="text-sm text-muted-foreground">{label}</span>
-                  </div>
-                ))}
-              </motion.div>
-            </div>
-          </motion.div>
-        </>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="container py-12"
+        >
+          <div className="text-center mb-10">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1 }}
+              className="flex justify-center mb-6"
+            >
+              <div className="p-4 rounded-2xl bg-primary/10 border border-primary/20">
+                <Rocket className="h-10 w-10 text-primary" />
+              </div>
+            </motion.div>
+            
+            <motion.h1 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="text-4xl md:text-5xl font-bold tracking-tight mb-4"
+            >
+              IssuePilot
+            </motion.h1>
+            
+            <motion.p 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="text-lg text-muted-foreground max-w-xl mx-auto"
+            >
+              Analyze any GitHub issue with AI. Get summaries, root cause analysis, 
+              and implementation steps.
+            </motion.p>
+          </div>
+        </motion.div>
       )}
 
       <div className="container py-8">
@@ -244,39 +149,13 @@ export default function HomePage() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
+              transition={{ delay: 0.4 }}
             >
               <IssueInput
                 onSubmit={handleSubmit}
                 isLoading={analyzeMutation.isPending}
                 defaultValues={currentRequest || undefined}
               />
-              
-              {/* Quick Examples */}
-              {!analyzeMutation.isPending && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.8 }}
-                  className="mt-4 text-center"
-                >
-                  <p className="text-sm text-muted-foreground mb-2">Try with popular repos:</p>
-                  <div className="flex flex-wrap justify-center gap-2">
-                    {quickExamples.map(({ repo, issue, label }) => (
-                      <Button
-                        key={repo}
-                        variant="outline"
-                        size="sm"
-                        className="text-xs"
-                        onClick={() => handleSubmit({ repo, issueNumber: issue })}
-                      >
-                        <Github className="h-3 w-3 mr-1" />
-                        {label} #{issue}
-                      </Button>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
             </motion.div>
           )}
 
@@ -320,8 +199,7 @@ export default function HomePage() {
                 <div className="text-center mb-6">
                   <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20">
                     <Zap className="h-4 w-4 text-primary animate-pulse" />
-                    <span className="text-sm font-medium">Analyzing with AI magic...</span>
-                    <Sparkles className="h-4 w-4 text-primary animate-pulse" />
+                    <span className="text-sm font-medium">Analyzing issue...</span>
                   </div>
                 </div>
                 <AnalysisSkeleton />
@@ -355,29 +233,26 @@ export default function HomePage() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.9 }}
+              transition={{ delay: 0.5 }}
               className="mt-16"
             >
-              <h2 className="text-center text-2xl font-bold mb-2">
+              <h2 className="text-center text-xl font-semibold mb-6 text-muted-foreground">
                 What you get
               </h2>
-              <p className="text-center text-muted-foreground mb-8">
-                Powerful insights in seconds, not hours
-              </p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {features.map(({ icon: Icon, title, description, color, bgColor }, index) => (
+                {features.map(({ icon: Icon, title, description }, index) => (
                   <motion.div
                     key={title}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 1 + index * 0.1 }}
+                    transition={{ delay: 0.6 + index * 0.1 }}
                   >
-                    <Card className="text-center h-full interactive-lift glass-card">
+                    <Card className="text-center h-full hover:bg-muted/50 transition-colors">
                       <CardContent className="pt-6">
-                        <div className={`inline-flex p-3 rounded-xl ${bgColor} mb-3`}>
-                          <Icon className={`h-6 w-6 ${color}`} />
+                        <div className="inline-flex p-3 rounded-lg bg-muted mb-3">
+                          <Icon className="h-5 w-5 text-muted-foreground" />
                         </div>
-                        <h3 className="font-semibold mb-1">{title}</h3>
+                        <h3 className="font-medium text-sm mb-1">{title}</h3>
                         <p className="text-xs text-muted-foreground">{description}</p>
                       </CardContent>
                     </Card>
