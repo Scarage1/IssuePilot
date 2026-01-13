@@ -2,13 +2,51 @@
 AI Engine for IssuePilot - Handles LLM interactions
 """
 
+import logging
 import os
 from typing import Optional
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, APIError, RateLimitError, AuthenticationError, BadRequestError
 
 from .schemas import AnalysisResult, GitHubIssue
 from .utils import clean_json_response, truncate_text
+
+logger = logging.getLogger("issuepilot.ai")
+
+# Valid models for OpenAI
+VALID_MODELS = [
+    "gpt-4o",
+    "gpt-4o-mini",
+    "gpt-4-turbo",
+    "gpt-4",
+    "gpt-3.5-turbo",
+    "gpt-3.5-turbo-16k",
+]
+
+
+class AIEngineError(Exception):
+    """Base exception for AI Engine errors"""
+    pass
+
+
+class APIKeyError(AIEngineError):
+    """Raised when API key is missing or invalid"""
+    pass
+
+
+class RateLimitExceededError(AIEngineError):
+    """Raised when rate limit is exceeded"""
+    pass
+
+
+class ModelError(AIEngineError):
+    """Raised when model is invalid or unavailable"""
+    pass
+
+
+class ContextLengthError(AIEngineError):
+    """Raised when context length is exceeded"""
+    pass
 
 
 class AIEngine:
@@ -75,16 +113,38 @@ Return ONLY valid JSON, no additional text."""
             api_key: API key for AI provider
             model: Model to use for analysis
             provider: AI provider (currently supports 'openai')
+            
+        Raises:
+            APIKeyError: If API key is not configured
+            ModelError: If model is invalid
         """
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.model = model or os.getenv("MODEL", "gpt-4o-mini")
         self.provider = provider or os.getenv("AI_PROVIDER", "openai")
 
+        # Validate API key
         if not self.api_key:
-            raise ValueError(
-                "AI API key is required. Set OPENAI_API_KEY environment variable."
+            raise APIKeyError(
+                "OpenAI API key not configured. "
+                "Set OPENAI_API_KEY in your .env file or environment variables. "
+                "Get your API key at: https://platform.openai.com/api-keys"
             )
-
+        
+        if len(self.api_key) < 20:
+            raise APIKeyError(
+                "OpenAI API key appears to be invalid (too short). "
+                "Please check your OPENAI_API_KEY configuration."
+            )
+        
+        # Validate model
+        if self.model not in VALID_MODELS:
+            raise ModelError(
+                f"Invalid model '{self.model}'. "
+                f"Valid models are: {', '.join(VALID_MODELS)}. "
+                "Set MODEL in your .env file to use a different model."
+            )
+        
+        logger.info(f"AI Engine initialized with model: {self.model}")
         self.client = AsyncOpenAI(api_key=self.api_key)
 
     def _build_prompt(self, issue: GitHubIssue) -> str:
@@ -124,25 +184,71 @@ Return ONLY valid JSON, no additional text."""
 
         Returns:
             AnalysisResult with structured analysis
+            
+        Raises:
+            APIKeyError: If API key is invalid
+            RateLimitExceededError: If rate limit is exceeded
+            ContextLengthError: If input is too long
+            AIEngineError: For other AI-related errors
         """
         prompt = self._build_prompt(issue)
+        logger.debug(f"Analyzing issue: {issue.title[:50]}...")
 
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": self.SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.3,
-            max_tokens=2000,
-            response_format={"type": "json_object"},
-        )
-
-        content = response.choices[0].message.content
-        result = clean_json_response(content)
-
-        # Validate and build result
-        return self._validate_result(result)
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": self.SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,
+                max_tokens=2000,
+                response_format={"type": "json_object"},
+            )
+            
+            content = response.choices[0].message.content
+            result = clean_json_response(content)
+            logger.debug("AI analysis completed successfully")
+            
+            # Validate and build result
+            return self._validate_result(result)
+            
+        except AuthenticationError as e:
+            logger.error(f"OpenAI authentication error: {e}")
+            raise APIKeyError(
+                "OpenAI API key is invalid or expired. "
+                "Please check your OPENAI_API_KEY and ensure it's active. "
+                "Get a new key at: https://platform.openai.com/api-keys"
+            )
+        except RateLimitError as e:
+            logger.warning(f"OpenAI rate limit exceeded: {e}")
+            raise RateLimitExceededError(
+                "OpenAI rate limit exceeded. Please wait a moment and try again. "
+                "Tips: 1) Wait 20-60 seconds, 2) Upgrade your OpenAI plan, "
+                "3) Use a different API key, 4) Reduce request frequency."
+            )
+        except BadRequestError as e:
+            error_msg = str(e).lower()
+            if "context_length" in error_msg or "maximum context" in error_msg:
+                logger.error(f"Context length exceeded: {e}")
+                raise ContextLengthError(
+                    "The issue content is too long for the AI model. "
+                    "Try analyzing a shorter issue or upgrade to a model with larger context."
+                )
+            logger.error(f"OpenAI bad request: {e}")
+            raise AIEngineError(f"Invalid request to OpenAI: {str(e)}")
+        except APIError as e:
+            logger.error(f"OpenAI API error: {e}")
+            raise AIEngineError(
+                f"OpenAI API error: {str(e)}. "
+                "This may be a temporary issue. Please try again in a few moments."
+            )
+        except Exception as e:
+            logger.error(f"Unexpected AI error: {e}")
+            raise AIEngineError(
+                f"Unexpected error during AI analysis: {str(e)}. "
+                "Please check your configuration and try again."
+            )
 
     def _validate_result(self, result: dict) -> AnalysisResult:
         """

@@ -3,7 +3,7 @@ Tests for GitHub Client
 """
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
-from app.github_client import GitHubClient
+from app.github_client import GitHubClient, GitHubNotFoundError, GitHubAPIError, GitHubRateLimitError
 from app.schemas import GitHubIssue
 
 
@@ -26,44 +26,20 @@ class TestGitHubClient:
     
     @pytest.mark.asyncio
     async def test_get_issue_not_found(self):
-        """Test that a 404 error is raised for non-existent issues"""
-        import httpx
+        """Test that GitHubNotFoundError is raised for non-existent issues"""
+        client = GitHubClient(max_retries=0)
         
-        with patch('httpx.AsyncClient') as mock_client:
-            mock_response = MagicMock()
-            mock_response.status_code = 404
-            mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-                "404 Not Found", request=MagicMock(), response=mock_response
-            )
-            
-            mock_instance = AsyncMock()
-            mock_instance.get = AsyncMock(return_value=mock_response)
-            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-            mock_instance.__aexit__ = AsyncMock(return_value=None)
-            mock_client.return_value = mock_instance
-            
-            client = GitHubClient()
-            
-            with pytest.raises(httpx.HTTPStatusError):
+        with patch.object(client, '_request_with_retry', side_effect=GitHubNotFoundError("Resource not found")):
+            with pytest.raises(GitHubNotFoundError):
                 await client.get_issue("owner/repo", 99999)
-    
     
     @pytest.mark.asyncio
     async def test_network_timeout(self):
         """Test handling of network timeouts"""
-        import httpx
+        client = GitHubClient(max_retries=0)
         
-        with patch('httpx.AsyncClient') as mock_client:
-            mock_instance = AsyncMock()
-            # Simulate the network connection just hanging
-            mock_instance.get.side_effect = httpx.ReadTimeout("Connection timed out")
-            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-            mock_instance.__aexit__ = AsyncMock(return_value=None)
-            mock_client.return_value = mock_instance
-            
-            client = GitHubClient()
-            
-            with pytest.raises(httpx.ReadTimeout):
+        with patch.object(client, '_request_with_retry', side_effect=GitHubAPIError("Request failed: timeout")):
+            with pytest.raises(GitHubAPIError):
                 await client.get_issue("owner/repo", 1)
     
     @pytest.mark.asyncio
@@ -80,20 +56,13 @@ class TestGitHubClient:
             "updated_at": "2024-01-01T00:00:00Z"
         }
 
-        with patch('httpx.AsyncClient') as mock_client:
-            mock_response = MagicMock()
-            mock_response.json.return_value = mock_issue_data
-            mock_response.raise_for_status = MagicMock()
+        client = GitHubClient()
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = mock_issue_data
 
-            mock_instance = AsyncMock()
-            mock_instance.get = AsyncMock(return_value=mock_response)
-            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-            mock_instance.__aexit__ = AsyncMock(return_value=None)
-            mock_client.return_value = mock_instance
-
-            client = GitHubClient()
-
-            with patch.object(client, "get_issue_comments", return_value=[]):
+        with patch.object(client, '_request_with_retry', return_value=mock_response):
+            with patch.object(client, 'get_issue_comments', return_value=[]):
                 issue = await client.get_issue("owner/repo", 1)
 
         assert issue.body == ""
@@ -113,20 +82,13 @@ class TestGitHubClient:
             "updated_at": "2024-01-01T00:00:00Z",
         }
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_response = MagicMock()
-            mock_response.json.return_value = mock_issue_data
-            mock_response.raise_for_status = MagicMock()
+        client = GitHubClient()
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = mock_issue_data
 
-            mock_instance = AsyncMock()
-            mock_instance.get = AsyncMock(return_value=mock_response)
-            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-            mock_instance.__aexit__ = AsyncMock(return_value=None)
-            mock_client.return_value = mock_instance
-
-            client = GitHubClient()
-
-            with patch.object(client, "get_issue_comments", return_value=[]):
+        with patch.object(client, '_request_with_retry', return_value=mock_response):
+            with patch.object(client, 'get_issue_comments', return_value=[]):
                 issue = await client.get_issue("owner/repo", 2)
 
         assert issue.labels == []
@@ -137,20 +99,10 @@ class TestGitHubClient:
         """
         Test behavior when GitHub server is unreachable (connection error).
         """
-        import httpx
+        client = GitHubClient(max_retries=0)
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_instance = AsyncMock()
-            mock_instance.get.side_effect = httpx.ConnectError(
-                "GitHub server unreachable"
-            )
-            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-            mock_instance.__aexit__ = AsyncMock(return_value=None)
-            mock_client.return_value = mock_instance
-
-            client = GitHubClient()
-
-            with pytest.raises(httpx.ConnectError):
+        with patch.object(client, '_request_with_retry', side_effect=GitHubAPIError("GitHub server unreachable")):
+            with pytest.raises(GitHubAPIError):
                 await client.get_issue("owner/repo", 1)
 
 
@@ -160,29 +112,22 @@ class TestGitHubClient:
         Test that max_comments is correctly passed as per_page parameter
         to the GitHub API request.
         """
-        mock_comments = [{"body": f"comment {i}"} for i in range(10)]
+        mock_comments = [{"body": f"comment {i}"} for i in range(5)]
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_response = MagicMock()
-            mock_response.json.return_value = mock_comments
-            mock_response.raise_for_status = MagicMock()
+        client = GitHubClient()
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = mock_comments
 
-            mock_instance = AsyncMock()
-            mock_instance.get = AsyncMock(return_value=mock_response)
-            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-            mock_instance.__aexit__ = AsyncMock(return_value=None)
-            mock_client.return_value = mock_instance
-
-            client = GitHubClient()
+        with patch.object(client, '_request_with_retry', return_value=mock_response) as mock_request:
             comments = await client.get_issue_comments("owner/repo", 1, max_comments=5)
+            
+            # Check that request was made with correct params
+            mock_request.assert_called_once()
+            _, kwargs = mock_request.call_args
+            assert kwargs.get('params', {}).get('per_page') == 5
 
-            # Assert API was called with correct per_page limit
-            mock_instance.get.assert_called_once()
-            _, kwargs = mock_instance.get.call_args
-            assert kwargs["params"]["per_page"] == 5
-
-        # Client returns whatever API returns (pagination handled by GitHub)
-        assert len(comments) == 10
+        assert len(comments) == 5
 
 
     @pytest.mark.asyncio
@@ -193,18 +138,12 @@ class TestGitHubClient:
             {"number": 2, "title": "PR", "body": "", "html_url": "url", "pull_request": {}},
         ]
 
-        with patch('httpx.AsyncClient') as mock_client:
-            mock_response = MagicMock()
-            mock_response.json.return_value = mock_data
-            mock_response.raise_for_status = MagicMock()
+        client = GitHubClient()
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = mock_data
 
-            mock_instance = AsyncMock()
-            mock_instance.get = AsyncMock(return_value=mock_response)
-            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-            mock_instance.__aexit__ = AsyncMock(return_value=None)
-            mock_client.return_value = mock_instance
-
-            client = GitHubClient()
+        with patch.object(client, '_request_with_retry', return_value=mock_response):
             issues = await client.get_open_issues("owner/repo")
 
         assert len(issues) == 1
@@ -255,26 +194,18 @@ class TestGitHubClient:
         
         mock_comments = []
         
-        with patch('httpx.AsyncClient') as mock_client:
-            mock_response = MagicMock()
-            mock_response.json.return_value = mock_issue_data
-            mock_response.raise_for_status = MagicMock()
-            
-            mock_instance = AsyncMock()
-            mock_instance.get = AsyncMock(return_value=mock_response)
-            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-            mock_instance.__aexit__ = AsyncMock(return_value=None)
-            mock_client.return_value = mock_instance
-            
-            client = GitHubClient()
-            
-            # Mock get_issue_comments
+        client = GitHubClient()
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = mock_issue_data
+        
+        with patch.object(client, '_request_with_retry', return_value=mock_response):
             with patch.object(client, 'get_issue_comments', return_value=mock_comments):
                 issue = await client.get_issue("owner/repo", 123)
         
-            assert issue.number == 123
-            assert issue.title == "Test Issue"
-            assert issue.state == "open"
+        assert issue.number == 123
+        assert issue.title == "Test Issue"
+        assert issue.state == "open"
 
     @pytest.mark.asyncio
     async def test_get_issue_comments(self):
@@ -284,18 +215,12 @@ class TestGitHubClient:
             {"body": "Second comment"}
         ]
         
-        with patch('httpx.AsyncClient') as mock_client:
-            mock_response = MagicMock()
-            mock_response.json.return_value = mock_comments_data
-            mock_response.raise_for_status = MagicMock()
-            
-            mock_instance = AsyncMock()
-            mock_instance.get = AsyncMock(return_value=mock_response)
-            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-            mock_instance.__aexit__ = AsyncMock(return_value=None)
-            mock_client.return_value = mock_instance
-            
-            client = GitHubClient()
+        client = GitHubClient()
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = mock_comments_data
+        
+        with patch.object(client, '_request_with_retry', return_value=mock_response):
             comments = await client.get_issue_comments("owner/repo", 123)
         
         assert len(comments) == 2

@@ -53,10 +53,25 @@ class ExportResponse(BaseModel):
     markdown: str
 
 
+class DependencyStatus(BaseModel):
+    """Schema for dependency health status"""
+    
+    openai_api_configured: bool = Field(
+        ..., description="Whether OpenAI API key is configured"
+    )
+    github_api_accessible: bool = Field(
+        ..., description="Whether GitHub API is accessible"
+    )
+
+
 class HealthResponse(BaseModel):
     """Response schema for health check"""
 
     status: str = "ok"
+    version: str = "1.1.0"
+    dependencies: Optional[DependencyStatus] = None
+    cache_size: int = Field(default=0, description="Current number of cached entries")
+    cache_ttl: int = Field(default=300, description="Cache TTL in seconds")
 
 
 class GitHubIssue(BaseModel):

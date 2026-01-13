@@ -3,7 +3,7 @@ Tests for AI Engine
 """
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
-from app.ai_engine import AIEngine
+from app.ai_engine import AIEngine, APIKeyError, ModelError, VALID_MODELS
 from app.schemas import GitHubIssue, AnalysisResult
 
 
@@ -13,19 +13,32 @@ class TestAIEngine:
     def test_init_without_api_key(self):
         """Test initialization without API key raises error"""
         with patch.dict('os.environ', {}, clear=True):
-            with pytest.raises(ValueError, match="API key is required"):
+            with pytest.raises(APIKeyError, match="API key not configured"):
                 AIEngine()
 
     def test_init_with_api_key(self):
         """Test initialization with API key"""
-        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key'}):
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key_that_is_long_enough_12345'}):
             engine = AIEngine()
-            assert engine.api_key == "test_key"
+            assert engine.api_key == "test_key_that_is_long_enough_12345"
             assert engine.model == "gpt-4o-mini"
+    
+    def test_init_with_invalid_model(self):
+        """Test initialization with invalid model raises error"""
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key_that_is_long_enough_12345', 'MODEL': 'invalid-model'}):
+            with pytest.raises(ModelError, match="Invalid model"):
+                AIEngine()
+    
+    def test_init_with_valid_models(self):
+        """Test initialization accepts all valid models"""
+        for model in VALID_MODELS:
+            with patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key_that_is_long_enough_12345'}):
+                engine = AIEngine(model=model)
+                assert engine.model == model
 
     def test_build_prompt(self):
         """Test prompt building"""
-        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key'}):
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key_that_is_long_enough_12345'}):
             engine = AIEngine()
             
             issue = GitHubIssue(
@@ -48,7 +61,7 @@ class TestAIEngine:
 
     def test_validate_result_with_valid_data(self):
         """Test result validation with valid data"""
-        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key'}):
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key_that_is_long_enough_12345'}):
             engine = AIEngine()
             
             result_data = {
@@ -70,7 +83,7 @@ class TestAIEngine:
 
     def test_validate_result_with_missing_fields(self):
         """Test result validation fills in missing fields"""
-        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key'}):
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key_that_is_long_enough_12345'}):
             engine = AIEngine()
             
             result_data = {}
@@ -85,7 +98,7 @@ class TestAIEngine:
 
     def test_validate_result_filters_invalid_labels(self):
         """Test that invalid labels are filtered out"""
-        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key'}):
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key_that_is_long_enough_12345'}):
             engine = AIEngine()
             
             result_data = {
@@ -111,7 +124,7 @@ class TestAIEngine:
             MagicMock(message=MagicMock(content='{"summary": "Test", "root_cause": "Test", "solution_steps": ["Step 1"], "checklist": ["Item 1"], "labels": ["bug"]}'))
         ]
         
-        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key'}):
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key_that_is_long_enough_12345'}):
             engine = AIEngine()
             engine.client.chat.completions.create = AsyncMock(return_value=mock_response)
             

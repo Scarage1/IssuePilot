@@ -8,7 +8,7 @@ with open("../README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="issuepilot",
-    version="1.0.0",
+    version="1.1.0",
     author="IssuePilot Team",
     author_email="team@issuepilot.dev",
     description="AI-powered GitHub issue analysis assistant",
@@ -36,7 +36,15 @@ setup(
     python_requires=">=3.9",
     install_requires=[
         "httpx>=0.25.0",
+        "rich>=13.0.0",
+        "pyyaml>=6.0.0",
     ],
+    extras_require={
+        "dev": [
+            "pytest>=7.4.0",
+            "black>=23.11.0",
+        ],
+    },
     entry_points={
         "console_scripts": [
             "issuepilot=issuepilot:main",

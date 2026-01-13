@@ -16,9 +16,18 @@ class TestHealthEndpoint:
     
     def test_health_check(self):
         """Test health endpoint returns ok"""
-        response = client.get("/health")
-        assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        with patch('app.main.GitHubClient') as mock_client:
+            mock_instance = MagicMock()
+            mock_instance.check_rate_limit = AsyncMock(return_value={"remaining": 100})
+            mock_client.return_value = mock_instance
+            
+            response = client.get("/health")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "ok"
+            assert "version" in data
+            assert "dependencies" in data
+            assert "cache_size" in data
 
 
 class TestRootEndpoint:
