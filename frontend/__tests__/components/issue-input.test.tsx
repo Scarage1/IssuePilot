@@ -2,13 +2,24 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { IssueInput } from '@/components/analysis/issue-input';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 // Mock lucide-react icons
 jest.mock('lucide-react', () => ({
   Search: () => <span data-testid="search-icon">Search</span>,
   Key: () => <span data-testid="key-icon">Key</span>,
   Loader2: () => <span data-testid="loader-icon">Loading</span>,
+  Github: () => <span data-testid="github-icon">Github</span>,
+  Sparkles: () => <span data-testid="sparkles-icon">Sparkles</span>,
+  Info: () => <span data-testid="info-icon">Info</span>,
+  ChevronDown: () => <span data-testid="chevron-down-icon">ChevronDown</span>,
+  ChevronUp: () => <span data-testid="chevron-up-icon">ChevronUp</span>,
 }));
+
+// Helper function to render with TooltipProvider
+const renderWithTooltip = (ui: React.ReactElement) => {
+  return render(<TooltipProvider>{ui}</TooltipProvider>);
+};
 
 describe('IssueInput', () => {
   const mockOnSubmit = jest.fn();
@@ -18,7 +29,7 @@ describe('IssueInput', () => {
   });
 
   it('should render all form fields', () => {
-    render(<IssueInput onSubmit={mockOnSubmit} />);
+    renderWithTooltip(<IssueInput onSubmit={mockOnSubmit} />);
 
     expect(screen.getByLabelText(/repository/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/issue number/i)).toBeInTheDocument();
@@ -28,7 +39,7 @@ describe('IssueInput', () => {
 
   it('should show validation errors for empty fields', async () => {
     const user = userEvent.setup();
-    render(<IssueInput onSubmit={mockOnSubmit} />);
+    renderWithTooltip(<IssueInput onSubmit={mockOnSubmit} />);
 
     await user.click(screen.getByRole('button', { name: /analyze issue/i }));
 
@@ -39,7 +50,7 @@ describe('IssueInput', () => {
 
   it('should show error for invalid repo format', async () => {
     const user = userEvent.setup();
-    render(<IssueInput onSubmit={mockOnSubmit} />);
+    renderWithTooltip(<IssueInput onSubmit={mockOnSubmit} />);
 
     await user.type(screen.getByLabelText(/repository/i), 'invalid-format');
     await user.type(screen.getByLabelText(/issue number/i), '123');
@@ -51,7 +62,7 @@ describe('IssueInput', () => {
 
   it('should call onSubmit with valid data', async () => {
     const user = userEvent.setup();
-    render(<IssueInput onSubmit={mockOnSubmit} />);
+    renderWithTooltip(<IssueInput onSubmit={mockOnSubmit} />);
 
     await user.type(screen.getByLabelText(/repository/i), 'facebook/react');
     await user.type(screen.getByLabelText(/issue number/i), '123');
@@ -66,10 +77,12 @@ describe('IssueInput', () => {
 
   it('should include token when provided', async () => {
     const user = userEvent.setup();
-    render(<IssueInput onSubmit={mockOnSubmit} />);
+    renderWithTooltip(<IssueInput onSubmit={mockOnSubmit} />);
 
     await user.type(screen.getByLabelText(/repository/i), 'owner/repo');
     await user.type(screen.getByLabelText(/issue number/i), '456');
+    // Click to expand token input first
+    await user.click(screen.getByText(/github token/i));
     await user.type(screen.getByPlaceholderText(/ghp_/i), 'ghp_test_token');
     await user.click(screen.getByRole('button', { name: /analyze issue/i }));
 
@@ -82,7 +95,7 @@ describe('IssueInput', () => {
 
   it('should call onSubmit when GitHub URL is pasted and submit clicked', async () => {
     const user = userEvent.setup();
-    render(<IssueInput onSubmit={mockOnSubmit} />);
+    renderWithTooltip(<IssueInput onSubmit={mockOnSubmit} />);
 
     const repoInput = screen.getByLabelText(/repository/i);
     
@@ -103,16 +116,16 @@ describe('IssueInput', () => {
   });
 
   it('should show loading state when isLoading is true', () => {
-    render(<IssueInput onSubmit={mockOnSubmit} isLoading={true} />);
+    renderWithTooltip(<IssueInput onSubmit={mockOnSubmit} isLoading={true} />);
 
-    expect(screen.getByRole('button')).toBeDisabled();
+    expect(screen.getByRole('button', { name: /analyzing/i })).toBeDisabled();
     expect(screen.getByText(/analyzing/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/repository/i)).toBeDisabled();
     expect(screen.getByLabelText(/issue number/i)).toBeDisabled();
   });
 
   it('should use default values when provided', () => {
-    render(
+    renderWithTooltip(
       <IssueInput
         onSubmit={mockOnSubmit}
         defaultValues={{ repo: 'microsoft/vscode', issueNumber: 100 }}
@@ -125,7 +138,7 @@ describe('IssueInput', () => {
 
   it('should show error for zero issue number when validation happens', async () => {
     const user = userEvent.setup();
-    render(<IssueInput onSubmit={mockOnSubmit} />);
+    renderWithTooltip(<IssueInput onSubmit={mockOnSubmit} />);
 
     await user.type(screen.getByLabelText(/repository/i), 'owner/repo');
     // Type 0 as issue number to trigger validation

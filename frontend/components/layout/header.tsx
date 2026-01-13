@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/common/theme-toggle';
 import { RateLimitIndicator } from '@/components/common/rate-limit-indicator';
+import { KeyboardShortcuts } from '@/components/common/keyboard-shortcuts';
 import { APP_NAME, GITHUB_REPO_URL } from '@/lib/constants';
 
 const navLinks = [
@@ -49,6 +50,7 @@ export function Header() {
 
         <div className="flex flex-1 items-center justify-end space-x-2">
           <RateLimitIndicator className="hidden sm:flex" />
+          <KeyboardShortcuts />
           <nav className="flex items-center space-x-2">
             <Button variant="ghost" size="icon" asChild>
               <a
